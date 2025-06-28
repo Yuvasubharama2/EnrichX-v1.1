@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://inejpuwktglspygjgjlz.supabase.co';
-const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluZWpwdXdrdGdsc3B5Z2pnamx6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTA5MTY5OSwiZXhwIjoyMDY2NjY3Njk5fQ.your-service-key-here';
+const supabaseUrl = 'https://pmvqrzillkzmpctjsgjo.supabase.co';
+const supabaseServiceKey = 'YOUR_SERVICE_ROLE_KEY_HERE'; // You'll need to get this from your Supabase dashboard
 
 // Create admin client with service role
 const supabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -18,7 +18,7 @@ async function createAdminAccount() {
     // Create admin user
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: 'admin@enrichx.com',
-      password: 'admin123',
+      password: 'Yuva8856@',
       email_confirm: true,
       user_metadata: {
         name: 'Admin User',
@@ -37,7 +37,7 @@ async function createAdminAccount() {
 
     console.log('✅ Admin account created successfully!');
     console.log('📧 Email: admin@enrichx.com');
-    console.log('🔑 Password: admin123');
+    console.log('🔑 Password: Yuva8856@');
     console.log('👤 Role: admin');
     console.log('💎 Tier: enterprise');
     
