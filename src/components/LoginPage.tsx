@@ -14,7 +14,6 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
   const [showPassword, setShowPassword] = useState(false);
   const [subscriptionTier, setSubscriptionTier] = useState('pro');
   const [showDashboardChoice, setShowDashboardChoice] = useState(false);
-  const [pendingAuth, setPendingAuth] = useState<any>(null);
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -23,13 +22,12 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
     try {
       const result = await login(email, password, isSignUp ? subscriptionTier : undefined);
       
-      // Check if this is admin login and show dashboard choice
+      // Check if this is admin login (not signup) and show dashboard choice
       if (email === 'admin@enrichx.com' && !isSignUp) {
         setShowDashboardChoice(true);
-        setPendingAuth(result);
       } else {
-        // Regular user or signup - go to appropriate dashboard
-        navigate(isSignUp ? '/search' : '/search');
+        // Regular user or signup - go to search dashboard
+        navigate('/search');
       }
     } catch (error) {
       console.error('Authentication failed:', error);
