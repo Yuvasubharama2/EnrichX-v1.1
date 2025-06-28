@@ -13,6 +13,7 @@ import UserCompaniesPage from './components/UserCompaniesPage';
 import SavedLists from './components/SavedLists';
 import BillingPage from './components/BillingPage';
 import LandingPage from './components/LandingPage';
+import AdminProtectedRoute from './components/AdminProtectedRoute';
 
 function AdminApp() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -20,6 +21,10 @@ function AdminApp() {
 
   const handleNavigateToCompanies = () => {
     setActiveTab('companies');
+  };
+
+  const handleNavigateToContacts = () => {
+    setActiveTab('contacts');
   };
 
   const renderContent = () => {
@@ -32,6 +37,7 @@ function AdminApp() {
             uploadType={uploadType} 
             onUploadTypeChange={setUploadType}
             onNavigateToCompanies={handleNavigateToCompanies}
+            onNavigateToContacts={handleNavigateToContacts}
           />
         );
       case 'companies':
@@ -136,9 +142,13 @@ function AppContent() {
     return <LandingPage />;
   }
 
-  // Admin users can access both dashboards, but this is handled by routing
-  // Regular users only get user dashboard
-  return <UserApp />;
+  return user.role === 'admin' ? (
+    <AdminProtectedRoute>
+      <AdminApp />
+    </AdminProtectedRoute>
+  ) : (
+    <UserApp />
+  );
 }
 
 function App() {
@@ -148,8 +158,6 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<LoginPage isSignup={true} />} />
-        <Route path="/dashboard" element={<AdminApp />} />
-        <Route path="/search" element={<AppContent />} />
         <Route path="/*" element={<AppContent />} />
       </Routes>
     </AuthProvider>
