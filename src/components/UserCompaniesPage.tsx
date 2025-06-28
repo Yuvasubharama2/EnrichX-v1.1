@@ -1,67 +1,61 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, Star, Building2, Mail, Phone, MapPin, ExternalLink } from 'lucide-react';
+import { Search, Filter, Download, Plus, Star, Building2, ExternalLink, MapPin, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 import { useAuth } from '../contexts/AuthContext';
 
-type Contact = Database['public']['Tables']['contacts']['Row'] & {
-  company?: Database['public']['Tables']['companies']['Row'];
-};
+type Company = Database['public']['Tables']['companies']['Row'];
 
-export default function UserDashboard() {
+export default function UserCompaniesPage() {
   const { user } = useAuth();
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
-    fetchContacts();
+    fetchCompanies();
   }, [user]);
 
-  const fetchContacts = async () => {
+  const fetchCompanies = async () => {
     if (!user) return;
 
     try {
       const { data, error } = await supabase
-        .from('contacts')
-        .select(`
-          *,
-          company:companies(*)
-        `)
+        .from('companies')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setContacts(data || []);
+      setCompanies(data || []);
     } catch (error) {
-      console.error('Error fetching contacts:', error);
+      console.error('Error fetching companies:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSelectContact = (contactId: string) => {
-    setSelectedContacts(prev => 
-      prev.includes(contactId) 
-        ? prev.filter(id => id !== contactId)
-        : [...prev, contactId]
+  const handleSelectCompany = (companyId: string) => {
+    setSelectedCompanies(prev => 
+      prev.includes(companyId) 
+        ? prev.filter(id => id !== companyId)
+        : [...prev, companyId]
     );
   };
 
   const handleSelectAll = () => {
-    setSelectedContacts(
-      selectedContacts.length === contacts.length 
+    setSelectedCompanies(
+      selectedCompanies.length === companies.length 
         ? [] 
-        : contacts.map(c => c.contact_id)
+        : companies.map(c => c.company_id)
     );
   };
 
-  const filteredContacts = contacts.filter(contact =>
-    contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    contact.job_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    contact.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    contact.company?.company_name?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredCompanies = companies.filter(company =>
+    company.company_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    company.industry.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    company.location_city.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (loading) {
@@ -78,9 +72,9 @@ export default function UserDashboard() {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Contact Database</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Companies Database</h1>
             <p className="text-gray-600 mt-1">
-              Search and discover verified contacts and companies
+              Discover and research companies in your target market
             </p>
           </div>
           <div className="flex items-center space-x-3">
@@ -100,7 +94,7 @@ export default function UserDashboard() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
-                placeholder="Search by name, company, job title, or email..."
+                placeholder="Search by company name, industry, or location..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -136,10 +130,10 @@ export default function UserDashboard() {
                 <option value="201-500">201-500</option>
               </select>
               <select className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                <option value="">Job Level</option>
-                <option value="c-level">C-Level</option>
-                <option value="vp">VP</option>
-                <option value="director">Director</option>
+                <option value="">Company Type</option>
+                <option value="public">Public</option>
+                <option value="private">Private</option>
+                <option value="startup">Startup</option>
               </select>
             </div>
           )}
@@ -147,11 +141,11 @@ export default function UserDashboard() {
       </div>
 
       {/* Actions Bar */}
-      {selectedContacts.length > 0 && (
+      {selectedCompanies.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <div className="flex items-center justify-between">
             <span className="text-blue-800 font-medium">
-              {selectedContacts.length} contact{selectedContacts.length !== 1 ? 's' : ''} selected
+              {selectedCompanies.length} compan{selectedCompanies.length !== 1 ? 'ies' : 'y'} selected
             </span>
             <div className="flex items-center space-x-3">
               <button className="flex items-center px-4 py-2 text-blue-700 bg-white border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors">
@@ -160,7 +154,7 @@ export default function UserDashboard() {
               </button>
               <button className="flex items-center px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
                 <Download className="w-4 h-4 mr-2" />
-                Export ({selectedContacts.length})
+                Export ({selectedCompanies.length})
               </button>
             </div>
           </div>
@@ -172,12 +166,12 @@ export default function UserDashboard() {
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">
-              {filteredContacts.length.toLocaleString()} contacts found
+              {filteredCompanies.length.toLocaleString()} companies found
             </h3>
             <div className="flex items-center space-x-2">
               <input
                 type="checkbox"
-                checked={selectedContacts.length === filteredContacts.length && filteredContacts.length > 0}
+                checked={selectedCompanies.length === filteredCompanies.length && filteredCompanies.length > 0}
                 onChange={handleSelectAll}
                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
@@ -187,13 +181,13 @@ export default function UserDashboard() {
         </div>
 
         <div className="divide-y divide-gray-200">
-          {filteredContacts.map((contact) => (
-            <div key={contact.contact_id} className="p-6 hover:bg-gray-50 transition-colors">
+          {filteredCompanies.map((company) => (
+            <div key={company.company_id} className="p-6 hover:bg-gray-50 transition-colors">
               <div className="flex items-start space-x-4">
                 <input
                   type="checkbox"
-                  checked={selectedContacts.includes(contact.contact_id)}
-                  onChange={() => handleSelectContact(contact.contact_id)}
+                  checked={selectedCompanies.includes(company.company_id)}
+                  onChange={() => handleSelectCompany(company.company_id)}
                   className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 
@@ -201,88 +195,56 @@ export default function UserDashboard() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
-                        <h4 className="text-lg font-semibold text-gray-900">{contact.name}</h4>
-                        {contact.linkedin_url && (
-                          <a
-                            href={contact.linkedin_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-700"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        )}
+                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <Building2 className="w-6 h-6 text-blue-600" />
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-semibold text-gray-900">{company.company_name}</h4>
+                          <div className="flex items-center space-x-4 text-sm text-gray-600">
+                            <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">
+                              {company.company_type}
+                            </span>
+                            <span>{company.industry}</span>
+                          </div>
+                        </div>
                       </div>
                       
-                      <p className="text-gray-700 font-medium mb-1">{contact.job_title}</p>
-                      
-                      <div className="flex items-center space-x-4 text-sm text-gray-600 mb-3">
-                        <div className="flex items-center">
-                          <Building2 className="w-4 h-4 mr-1" />
-                          {contact.company?.company_name || 'Unknown Company'}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                        <div className="flex items-center text-sm text-gray-600">
+                          <MapPin className="w-4 h-4 mr-2 text-gray-400" />
+                          <span>{company.hq_location}</span>
                         </div>
-                        <div className="flex items-center">
-                          <MapPin className="w-4 h-4 mr-1" />
-                          {contact.location_city}, {contact.location_state}
+                        <div className="flex items-center text-sm text-gray-600">
+                          <Users className="w-4 h-4 mr-2 text-gray-400" />
+                          <span>{company.size_range} employees</span>
                         </div>
-                      </div>
-
-                      <div className="flex items-center space-x-6 text-sm">
-                        {contact.email && (
-                          <div className="flex items-center text-gray-700">
-                            <Mail className="w-4 h-4 mr-2 text-gray-400" />
-                            <span>{contact.email}</span>
-                            {contact.email_score && (
-                              <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                                {contact.email_score}% verified
-                              </span>
-                            )}
+                        {company.revenue && (
+                          <div className="flex items-center text-sm text-gray-600">
+                            <span className="font-medium">Revenue:</span>
+                            <span className="ml-1">{company.revenue}</span>
                           </div>
                         )}
-                        {contact.phone_number && (
-                          <div className="flex items-center text-gray-700">
-                            <Phone className="w-4 h-4 mr-2 text-gray-400" />
-                            <span>{contact.phone_number}</span>
+                        {company.website && (
+                          <div className="flex items-center text-sm">
+                            <a
+                              href={company.website}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-700 flex items-center"
+                            >
+                              <ExternalLink className="w-4 h-4 mr-1" />
+                              Website
+                            </a>
                           </div>
                         )}
                       </div>
-                    </div>
 
-                    <div className="flex items-center space-x-2">
-                      <button className="p-2 text-gray-400 hover:text-yellow-500 transition-colors">
-                        <Star className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Company Info */}
-                  {contact.company && (
-                    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <h5 className="font-medium text-gray-900">{contact.company.company_name}</h5>
-                        <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
-                          {contact.company.size_range} employees
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
-                        <div>
-                          <span className="font-medium">Industry:</span> {contact.company.industry}
-                        </div>
-                        <div>
-                          <span className="font-medium">Revenue:</span> {contact.company.revenue}
-                        </div>
-                        <div>
-                          <span className="font-medium">Type:</span> {contact.company.company_type}
-                        </div>
-                        <div>
-                          <span className="font-medium">Location:</span> {contact.company.hq_location}
-                        </div>
-                      </div>
-                      {contact.company.technologies_used && contact.company.technologies_used.length > 0 && (
-                        <div className="mt-3">
+                      {/* Technologies */}
+                      {company.technologies_used && company.technologies_used.length > 0 && (
+                        <div className="mb-3">
                           <span className="text-sm font-medium text-gray-700">Technologies:</span>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {contact.company.technologies_used.map((tech, index) => (
+                            {company.technologies_used.map((tech, index) => (
                               <span
                                 key={index}
                                 className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs"
@@ -293,22 +255,55 @@ export default function UserDashboard() {
                           </div>
                         </div>
                       )}
+
+                      {/* Keywords */}
+                      {company.company_keywords && company.company_keywords.length > 0 && (
+                        <div>
+                          <span className="text-sm font-medium text-gray-700">Keywords:</span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {company.company_keywords.map((keyword, index) => (
+                              <span
+                                key={index}
+                                className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs"
+                              >
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
+
+                    <div className="flex items-center space-x-2">
+                      <button className="p-2 text-gray-400 hover:text-yellow-500 transition-colors">
+                        <Star className="w-5 h-5" />
+                      </button>
+                      {company.linkedin_url && (
+                        <a
+                          href={company.linkedin_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                        >
+                          <ExternalLink className="w-5 h-5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           ))}
         </div>
 
-        {filteredContacts.length === 0 && (
+        {filteredCompanies.length === 0 && (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Search className="w-8 h-8 text-gray-400" />
+              <Building2 className="w-8 h-8 text-gray-400" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No contacts found</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No companies found</h3>
             <p className="text-gray-600">
-              {searchQuery ? 'Try adjusting your search terms' : 'No contacts are available for your subscription tier'}
+              {searchQuery ? 'Try adjusting your search terms' : 'No companies are available for your subscription tier'}
             </p>
           </div>
         )}

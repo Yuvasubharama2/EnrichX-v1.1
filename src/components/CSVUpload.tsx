@@ -1,11 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { Upload, FileText, CheckCircle, XCircle, AlertCircle, Download } from 'lucide-react';
-import { UploadResult, CSVMapping, UploadError, FailedRowData } from '../types'; // Import new types
+import { supabase } from '../lib/supabase';
+import { Database } from '../types/database';
+import { UploadResult, CSVMapping, UploadError, FailedRowData } from '../types';
 
 interface CSVUploadProps {
   uploadType: 'companies' | 'contacts';
   onUploadTypeChange: (type: 'companies' | 'contacts') => void;
 }
+
+type CompanyInsert = Database['public']['Tables']['companies']['Insert'];
+type ContactInsert = Database['public']['Tables']['contacts']['Insert'];
 
 export default function CSVUpload({ uploadType, onUploadTypeChange }: CSVUploadProps) {
   const [file, setFile] = useState<File | null>(null);
@@ -50,11 +55,9 @@ export default function CSVUpload({ uploadType, onUploadTypeChange }: CSVUploadP
   ];
 
   const currentFields = uploadType === 'companies' ? companyFields : contactFields;
-
-  // Define required fields based on upload type
   const requiredFields = uploadType === 'companies'
-    ? ['company_name', 'linkedin_url']
-    : ['name', 'linkedin_url', 'company_name', 'email'];
+    ? ['company_name']
+    : ['name', 'job_title', 'company_name'];
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -68,27 +71,19 @@ export default function CSVUpload({ uploadType, onUploadTypeChange }: CSVUploadP
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target?.result as string;
-      // Basic CSV parsing - handles commas but not quoted commas/newlines
-      // Also replace "-" with empty string
       const rawRows = text.split('\n').map(row =>
         row.split(',').map(cell => cell.trim()).map(cell => cell === '-' ? '' : cell)
       );
 
-      // Filter out rows that contain only empty strings after trimming
-      // Keep the header row (index 0) regardless
       const filteredRows = rawRows.filter((row, index) => {
-        if (index === 0) {
-          return true; // Always keep the header row
-        }
-        // Keep the row if at least one cell is not empty after trimming
+        if (index === 0) return true;
         return row.some(cell => cell !== '');
       });
 
-      setCsvData(filteredRows); // Use filtered rows
+      setCsvData(filteredRows);
       setStep('preview');
 
-      // Auto-map columns based on header names
-      // Use the headers from the filtered data (which is the original header row)
+      // Auto-map columns
       const headers = filteredRows[0];
       const autoMapping: CSVMapping = {};
       headers.forEach((header, index) => {
@@ -109,123 +104,162 @@ export default function CSVUpload({ uploadType, onUploadTypeChange }: CSVUploadP
     setUploading(true);
     setStep('mapping');
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      const errors: UploadError[] = [];
+      const failedRowsData: FailedRowData[] = [];
+      const dataRows = csvData.slice(1);
+      const successfulData: (CompanyInsert | ContactInsert)[] = [];
 
-    const errors: UploadError[] = [];
-    const failedRowsData: FailedRowData[] = [];
-    const dataRows = csvData.slice(1); // Exclude header row
+      // Process each row
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i];
+        const rowErrors: UploadError[] = [];
+        
+        // Validate required fields
+        for (const field of requiredFields) {
+          const columnIndex = mapping[field] ? parseInt(mapping[field], 10) : -1;
+          const cellValue = columnIndex !== -1 && row[columnIndex] !== undefined ? row[columnIndex] : '';
+          
+          if (!cellValue) {
+            rowErrors.push({
+              row: i,
+              field: field,
+              value: cellValue,
+              error: 'Required field is empty'
+            });
+          }
+        }
 
-    dataRows.forEach((row, dataRowIndex) => {
-      const rowErrors: UploadError[] = [];
-      const originalData = row; // Keep original data for the failed row display
-
-      currentFields.forEach(field => {
-        const columnIndex = mapping[field] ? parseInt(mapping[field], 10) : -1;
-        const cellValue = columnIndex !== -1 && row[columnIndex] !== undefined ? row[columnIndex] : '';
-
-        // --- Basic Validation Logic ---
-
-        // 1. Required Fields Check
-        if (requiredFields.includes(field) && cellValue === '') {
-          rowErrors.push({
-            row: dataRowIndex, // 0-based index of the data row
-            field: field,
-            value: cellValue,
-            error: 'Required field is empty'
+        // If there are validation errors, add to failed rows
+        if (rowErrors.length > 0) {
+          failedRowsData.push({
+            row_index: i,
+            original_data: row,
+            errors: rowErrors
           });
+          errors.push(...rowErrors);
+          continue;
         }
 
-        // 2. Format Checks (simple examples)
-        if (field === 'email' && cellValue !== '' && !/\S+@\S+\.\S+/.test(cellValue)) {
-           rowErrors.push({
-             row: dataRowIndex,
-             field: field,
-             value: cellValue,
-             error: 'Invalid email format'
-           });
-        }
+        // Process successful row
+        if (uploadType === 'companies') {
+          const companyData: CompanyInsert = {
+            company_name: getFieldValue(row, 'company_name') || '',
+            company_type: getFieldValue(row, 'company_type') || 'Private',
+            industry: getFieldValue(row, 'industry') || '',
+            website: getFieldValue(row, 'website') || null,
+            linkedin_url: getFieldValue(row, 'linkedin_url') || null,
+            hq_location: getFieldValue(row, 'hq_location') || '',
+            location_city: getFieldValue(row, 'location_city') || '',
+            location_state: getFieldValue(row, 'location_state') || '',
+            location_region: getFieldValue(row, 'location_region') || '',
+            size_range: getFieldValue(row, 'size_range') || '',
+            headcount: parseNumber(getFieldValue(row, 'headcount')),
+            revenue: getFieldValue(row, 'revenue') || null,
+            phone_number: getFieldValue(row, 'phone_number') || null,
+            company_keywords: parseArray(getFieldValue(row, 'company_keywords')),
+            industry_keywords: parseArray(getFieldValue(row, 'industry_keywords')),
+            technologies_used: parseArray(getFieldValue(row, 'technologies_used')),
+            visible_to_tiers: ['free'] // Default visibility
+          };
+          successfulData.push(companyData);
+        } else {
+          // For contacts, we need to find or create the company first
+          const companyName = getFieldValue(row, 'company_name');
+          let companyId: string | null = null;
 
-        if ((field === 'website' || field === 'linkedin_url') && cellValue !== '' && !/^https?:\/\/\S+\.\S+/.test(cellValue)) {
-           rowErrors.push({
-             row: dataRowIndex,
-             field: field,
-             value: cellValue,
-             error: 'Invalid URL format'
-           });
-        }
+          if (companyName) {
+            // Try to find existing company
+            const { data: existingCompany } = await supabase
+              .from('companies')
+              .select('company_id')
+              .eq('company_name', companyName)
+              .single();
 
-        // Handle number formats, including 'M' and 'B' suffixes
-        if ((field === 'headcount' || field === 'revenue' || field === 'email_score') && cellValue !== '') {
-           let numericValue: number | null = null;
-           const lowerCellValue = cellValue.toLowerCase();
+            if (existingCompany) {
+              companyId = existingCompany.company_id;
+            } else {
+              // Create new company
+              const { data: newCompany, error: companyError } = await supabase
+                .from('companies')
+                .insert({
+                  company_name: companyName,
+                  visible_to_tiers: ['free']
+                })
+                .select('company_id')
+                .single();
 
-           if (lowerCellValue.endsWith('m')) {
-              const numPart = lowerCellValue.slice(0, -1);
-              const parsedNum = parseFloat(numPart);
-              if (!isNaN(parsedNum)) {
-                 numericValue = parsedNum * 1_000_000; // Convert to millions
+              if (newCompany && !companyError) {
+                companyId = newCompany.company_id;
               }
-           } else if (lowerCellValue.endsWith('b')) {
-              const numPart = lowerCellValue.slice(0, -1);
-              const parsedNum = parseFloat(numPart);
-              if (!isNaN(parsedNum)) {
-                 numericValue = parsedNum * 1_000_000_000; // Convert to billions
-              }
-           } else {
-              const parsedNum = parseFloat(cellValue);
-               if (!isNaN(parsedNum)) {
-                 numericValue = parsedNum; // Standard number
-              }
-           }
+            }
+          }
 
-           if (numericValue === null || isNaN(numericValue)) {
-              rowErrors.push({
-                row: dataRowIndex,
-                field: field,
-                value: cellValue,
-                error: 'Invalid number format'
-              });
-           }
-           // Note: We are not currently storing the parsed numericValue,
-           // but this logic validates the format.
+          if (companyId) {
+            const contactData: ContactInsert = {
+              name: getFieldValue(row, 'name') || '',
+              linkedin_url: getFieldValue(row, 'linkedin_url') || null,
+              job_title: getFieldValue(row, 'job_title') || '',
+              company_id: companyId,
+              start_date: getFieldValue(row, 'start_date') || null,
+              email: getFieldValue(row, 'email') || null,
+              email_score: parseNumber(getFieldValue(row, 'email_score')),
+              phone_number: getFieldValue(row, 'phone_number') || null,
+              location_city: getFieldValue(row, 'location_city') || '',
+              location_state: getFieldValue(row, 'location_state') || '',
+              location_region: getFieldValue(row, 'location_region') || '',
+              visible_to_tiers: ['free'] // Default visibility
+            };
+            successfulData.push(contactData);
+          }
         }
-
-        // Add more validation rules as needed...
-      });
-
-      if (rowErrors.length > 0) {
-        failedRowsData.push({
-          row_index: dataRowIndex, // 0-based index of the data row
-          original_data: originalData,
-          errors: rowErrors
-        });
-        errors.push(...rowErrors); // Add errors to the overall list
       }
-    });
 
-    const totalDataRows = dataRows.length;
-    const failedCount = failedRowsData.length;
-    const successfulRows = totalDataRows - failedCount;
+      // Insert successful data
+      let addedCount = 0;
+      if (successfulData.length > 0) {
+        const { data, error } = await supabase
+          .from(uploadType)
+          .insert(successfulData);
 
-    // Simulate added/updated counts for successful rows
-    const addedCount = Math.floor(successfulRows * 0.8); // Arbitrary split
-    const updatedCount = successfulRows - addedCount;
+        if (!error) {
+          addedCount = successfulData.length;
+        }
+      }
 
+      const result: UploadResult = {
+        total_rows: dataRows.length,
+        added: addedCount,
+        updated: 0,
+        failed: failedRowsData.length,
+        errors: errors,
+        failed_rows_data: failedRowsData,
+        processing_time: 2.8
+      };
 
-    const result: UploadResult = {
-      total_rows: totalDataRows,
-      added: addedCount,
-      updated: updatedCount,
-      failed: failedCount,
-      errors: errors, // All errors from failed rows
-      failed_rows_data: failedRowsData, // Data and errors for failed rows
-      processing_time: 2.8 // Simulated time
-    };
+      setUploadResult(result);
+    } catch (error) {
+      console.error('Upload error:', error);
+    } finally {
+      setUploading(false);
+      setStep('complete');
+    }
+  };
 
-    setUploadResult(result);
-    setUploading(false);
-    setStep('complete');
+  const getFieldValue = (row: string[], fieldName: string): string => {
+    const columnIndex = mapping[fieldName] ? parseInt(mapping[fieldName], 10) : -1;
+    return columnIndex !== -1 && row[columnIndex] !== undefined ? row[columnIndex] : '';
+  };
+
+  const parseNumber = (value: string): number | null => {
+    if (!value) return null;
+    const num = parseFloat(value);
+    return isNaN(num) ? null : num;
+  };
+
+  const parseArray = (value: string): string[] => {
+    if (!value) return [];
+    return value.split(';').map(item => item.trim()).filter(item => item);
   };
 
   const downloadTemplate = () => {
@@ -249,16 +283,6 @@ export default function CSVUpload({ uploadType, onUploadTypeChange }: CSVUploadP
       fileInputRef.current.value = '';
     }
   };
-
-  // Function to handle "Continue to Upload" - currently just resets
-  const handleContinue = () => {
-    console.log("Continue button clicked. Implement actual data storage logic here.");
-    // In a real application, this would trigger the final storage of successful data
-    // or navigate to a page to review/fix errors.
-    // For now, we'll just reset the process.
-    resetUpload();
-  };
-
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -392,7 +416,7 @@ export default function CSVUpload({ uploadType, onUploadTypeChange }: CSVUploadP
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {csvData.slice(1, Math.min(4, csvData.length)).map((row, index) => ( // Show max 3 data rows
+                {csvData.slice(1, Math.min(4, csvData.length)).map((row, index) => (
                   <tr key={index}>
                     {row.map((cell, cellIndex) => (
                       <td key={cellIndex} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -480,12 +504,12 @@ export default function CSVUpload({ uploadType, onUploadTypeChange }: CSVUploadP
 
           {uploadResult.failed_rows_data.length > 0 && (
             <div className="mb-6">
-              <h4 className="text-sm font-medium text-gray-900 mb-3">Failed Rows Data ({uploadResult.failed} rows)</h4>
+              <h4 className="text-sm font-medium text-gray-900 mb-3">Failed Rows ({uploadResult.failed} rows)</h4>
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 overflow-x-auto">
                  <table className="min-w-full divide-y divide-red-200">
                     <thead className="bg-red-100">
                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-red-800 uppercase tracking-wider">Row # (Processed Data)</th> {/* Clarify row number */}
+                          <th className="px-4 py-2 text-left text-xs font-medium text-red-800 uppercase tracking-wider">Row #</th>
                           {csvData[0]?.map((header, index) => (
                              <th
                                 key={index}
@@ -501,7 +525,7 @@ export default function CSVUpload({ uploadType, onUploadTypeChange }: CSVUploadP
                        {uploadResult.failed_rows_data.map((failedRow, index) => (
                           <tr key={index}>
                              <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-red-900">
-                                {failedRow.row_index + 1} {/* Display 1-based row number relative to processed data */}
+                                {failedRow.row_index + 1}
                              </td>
                              {failedRow.original_data.map((cell, cellIndex) => (
                                 <td key={cellIndex} className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
@@ -512,7 +536,7 @@ export default function CSVUpload({ uploadType, onUploadTypeChange }: CSVUploadP
                                 <ul>
                                    {failedRow.errors.map((error, errorIndex) => (
                                       <li key={errorIndex}>
-                                         <strong>{error.field}:</strong> {error.error} ("{error.value}")
+                                         <strong>{error.field}:</strong> {error.error}
                                       </li>
                                    ))}
                                 </ul>
@@ -532,14 +556,6 @@ export default function CSVUpload({ uploadType, onUploadTypeChange }: CSVUploadP
             >
               Upload Another File
             </button>
-            {uploadResult.failed > 0 && (
-               <button
-                 onClick={handleContinue}
-                 className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-               >
-                 Continue to Upload
-               </button>
-            )}
           </div>
         </div>
       )}

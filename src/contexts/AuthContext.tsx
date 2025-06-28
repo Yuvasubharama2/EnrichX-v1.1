@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
+import { supabase, updateUserMetadata } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
@@ -25,41 +26,116 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check for existing session
-    const savedUser = localStorage.getItem('enrichx_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-    setIsLoading(false);
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        const userData = createUserFromSupabaseUser(session.user);
+        setUser(userData);
+      }
+      setIsLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          const userData = createUserFromSupabaseUser(session.user);
+          setUser(userData);
+        } else {
+          setUser(null);
+        }
+        setIsLoading(false);
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  const createUserFromSupabaseUser = (supabaseUser: any): User => {
+    const metadata = supabaseUser.user_metadata || {};
+    return {
+      id: supabaseUser.id,
+      email: supabaseUser.email,
+      name: metadata.name || supabaseUser.email.split('@')[0],
+      role: metadata.role || 'subscriber',
+      subscription_tier: metadata.subscription_tier || 'free',
+      credits_remaining: metadata.credits_remaining || getDefaultCredits(metadata.subscription_tier || 'free'),
+      credits_monthly_limit: getDefaultCredits(metadata.subscription_tier || 'free'),
+      subscription_status: metadata.subscription_status || 'active',
+      created_at: new Date(supabaseUser.created_at),
+      last_login: new Date()
+    };
+  };
+
+  const getDefaultCredits = (tier: string) => {
+    switch (tier) {
+      case 'enterprise': return 10000;
+      case 'pro': return 2000;
+      case 'starter': return 500;
+      default: return 50;
+    }
+  };
 
   const login = async (email: string, password: string, subscriptionTier?: string) => {
     setIsLoading(true);
     
-    // Mock authentication - replace with real API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const mockUser: User = {
-      id: '1',
-      email,
-      name: email === 'admin@enrichx.com' ? 'Admin User' : 'John Doe',
-      role: email === 'admin@enrichx.com' ? 'admin' : 'subscriber',
-      subscription_tier: subscriptionTier || 'free',
-      credits_remaining: subscriptionTier === 'enterprise' ? 1000 : subscriptionTier === 'pro' ? 500 : 100,
-      credits_monthly_limit: subscriptionTier === 'enterprise' ? 1000 : subscriptionTier === 'pro' ? 500 : 100,
-      subscription_status: 'active',
-      created_at: new Date(),
-      last_login: new Date()
-    };
-    
-    setUser(mockUser);
-    localStorage.setItem('enrichx_user', JSON.stringify(mockUser));
-    setIsLoading(false);
+    try {
+      // Try to sign in first
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (signInError && signInError.message.includes('Invalid login credentials')) {
+        // If sign in fails, try to sign up
+        const role = email === 'admin@enrichx.com' ? 'admin' : 'subscriber';
+        const tier = subscriptionTier || (role === 'admin' ? 'enterprise' : 'free');
+        
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              name: email === 'admin@enrichx.com' ? 'Admin User' : 'User',
+              role,
+              subscription_tier: tier,
+              credits_remaining: getDefaultCredits(tier),
+              subscription_status: 'active'
+            }
+          }
+        });
+
+        if (signUpError) throw signUpError;
+        
+        if (signUpData.user) {
+          const userData = createUserFromSupabaseUser(signUpData.user);
+          setUser(userData);
+        }
+      } else if (signInError) {
+        throw signInError;
+      } else if (signInData.user) {
+        // Update user metadata if subscription tier is provided
+        if (subscriptionTier) {
+          await updateUserMetadata({
+            subscription_tier: subscriptionTier,
+            credits_remaining: getDefaultCredits(subscriptionTier)
+          });
+        }
+        
+        const userData = createUserFromSupabaseUser(signInData.user);
+        setUser(userData);
+      }
+    } catch (error) {
+      console.error('Authentication error:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('enrichx_user');
   };
 
   return (

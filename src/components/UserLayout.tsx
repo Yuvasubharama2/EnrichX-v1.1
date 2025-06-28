@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Database,
   Search,
+  Building2,
   BookmarkPlus,
   User,
   CreditCard,
@@ -11,7 +12,7 @@ import {
   X,
   Star,
   Download,
-  ArrowLeft // Import ArrowLeft
+  ArrowLeft
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -29,6 +30,7 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
 
   const navigation = [
     { id: 'search', name: 'Search Contacts', icon: Search },
+    { id: 'companies', name: 'Companies', icon: Building2 },
     { id: 'lists', name: 'Saved Lists', icon: BookmarkPlus },
     { id: 'favorites', name: 'Favorites', icon: Star },
     { id: 'exports', name: 'Export History', icon: Download },
@@ -46,7 +48,7 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
   };
 
   const handleGoHome = () => {
-    navigate('/'); // Navigate to the landing/home page
+    navigate('/');
   };
 
   return (
@@ -182,14 +184,13 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="flex items-center space-x-4"> {/* Added space-x-4 for spacing */}
+            <div className="flex items-center space-x-4">
               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-100 to-purple-100 text-blue-800 capitalize">
                 {user?.subscription_tier} Plan
               </span>
               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                 {user?.subscription_status}
               </span>
-              {/* Back Arrow Button */}
               <button
                 onClick={handleGoHome}
                 className="p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"

@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom'; // Removed BrowserRouter import
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './components/LoginPage';
 import AdminLayout from './components/AdminLayout';
 import UserLayout from './components/UserLayout';
 import Dashboard from './components/Dashboard';
 import CSVUpload from './components/CSVUpload';
+import AdminCompaniesPage from './components/AdminCompaniesPage';
+import AdminContactsPage from './components/AdminContactsPage';
 import UserDashboard from './components/UserDashboard';
+import UserCompaniesPage from './components/UserCompaniesPage';
 import SavedLists from './components/SavedLists';
 import BillingPage from './components/BillingPage';
 import LandingPage from './components/LandingPage';
@@ -22,19 +25,9 @@ function AdminApp() {
       case 'upload':
         return <CSVUpload uploadType={uploadType} onUploadTypeChange={setUploadType} />;
       case 'companies':
-        return (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Companies Management</h3>
-            <p className="text-gray-600">Company data management interface coming soon...</p>
-          </div>
-        );
+        return <AdminCompaniesPage />;
       case 'contacts':
-        return (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Contacts Management</h3>
-            <p className="text-gray-600">Contact data management interface coming soon...</p>
-          </div>
-        );
+        return <AdminContactsPage />;
       case 'settings':
         return (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
@@ -61,6 +54,8 @@ function UserApp() {
     switch (activeTab) {
       case 'search':
         return <UserDashboard />;
+      case 'companies':
+        return <UserCompaniesPage />;
       case 'lists':
         return <SavedLists />;
       case 'favorites':
@@ -136,17 +131,14 @@ function AppContent() {
 
 function App() {
   return (
-    // Removed BrowserRouter wrapper here
     <AuthProvider>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<LoginPage isSignup={true} />} />
-        {/* The AppContent component will render the appropriate layout (Admin or User) */}
         <Route path="/*" element={<AppContent />} />
       </Routes>
     </AuthProvider>
-    // Removed BrowserRouter wrapper here
   );
 }
 
