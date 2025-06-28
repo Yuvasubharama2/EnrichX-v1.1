@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Search, Filter, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
+import { Building2, Search, Filter, Eye, EyeOff, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 
@@ -11,6 +11,7 @@ export default function AdminCompaniesPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [updating, setUpdating] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchCompanies();
@@ -18,17 +19,26 @@ export default function AdminCompaniesPage() {
 
   const fetchCompanies = async () => {
     try {
+      setRefreshing(true);
+      console.log('Fetching companies...');
+      
       const { data, error } = await supabase
         .from('companies')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching companies:', error);
+        throw error;
+      }
+      
+      console.log('Companies fetched:', data?.length || 0);
       setCompanies(data || []);
     } catch (error) {
       console.error('Error fetching companies:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -96,6 +106,14 @@ export default function AdminCompaniesPage() {
           </p>
         </div>
         <div className="flex items-center space-x-4">
+          <button
+            onClick={fetchCompanies}
+            disabled={refreshing}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
           <span className="text-sm text-gray-600">
             Total: {companies.length} companies
           </span>

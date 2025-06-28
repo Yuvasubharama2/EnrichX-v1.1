@@ -8,12 +8,13 @@ interface CSVUploadProps {
   uploadType: 'companies' | 'contacts';
   onUploadTypeChange: (type: 'companies' | 'contacts') => void;
   onNavigateToCompanies?: () => void;
+  onNavigateToContacts?: () => void;
 }
 
 type CompanyInsert = Database['public']['Tables']['companies']['Insert'];
 type ContactInsert = Database['public']['Tables']['contacts']['Insert'];
 
-export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateToCompanies }: CSVUploadProps) {
+export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateToCompanies, onNavigateToContacts }: CSVUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [csvData, setCsvData] = useState<string[][]>([]);
   const [mapping, setMapping] = useState<CSVMapping>({});
@@ -73,7 +74,7 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
     reader.onload = (e) => {
       const text = e.target?.result as string;
       const rawRows = text.split('\n').map(row =>
-        row.split(',').map(cell => cell.trim()).map(cell => cell === '-' ? '' : cell)
+        row.split(',').map(cell => cell.trim().replace(/^"|"$/g, ''))
       );
 
       const filteredRows = rawRows.filter((row, index) => {
@@ -109,21 +110,27 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
       const errors: UploadError[] = [];
       const failedRowsData: FailedRowData[] = [];
       const dataRows = csvData.slice(1);
-      const successfulData: (CompanyInsert | ContactInsert)[] = [];
+      let successfulCount = 0;
+
+      console.log('Starting upload process...');
+      console.log('Data rows to process:', dataRows.length);
+      console.log('Upload type:', uploadType);
 
       // Process each row
       for (let i = 0; i < dataRows.length; i++) {
         const row = dataRows[i];
         const rowErrors: UploadError[] = [];
         
+        console.log(`Processing row ${i + 1}:`, row);
+        
         // Validate required fields
         for (const field of requiredFields) {
           const columnIndex = mapping[field] ? parseInt(mapping[field], 10) : -1;
           const cellValue = columnIndex !== -1 && row[columnIndex] !== undefined ? row[columnIndex] : '';
           
-          if (!cellValue) {
+          if (!cellValue || cellValue.trim() === '') {
             rowErrors.push({
-              row: i,
+              row: i + 1,
               field: field,
               value: cellValue,
               error: 'Required field is empty'
@@ -139,98 +146,176 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
             errors: rowErrors
           });
           errors.push(...rowErrors);
+          console.log(`Row ${i + 1} failed validation:`, rowErrors);
           continue;
         }
 
         // Process successful row
-        if (uploadType === 'companies') {
-          const companyData: CompanyInsert = {
-            company_name: getFieldValue(row, 'company_name') || '',
-            company_type: getFieldValue(row, 'company_type') || 'Private',
-            industry: getFieldValue(row, 'industry') || '',
-            website: getFieldValue(row, 'website') || null,
-            linkedin_url: getFieldValue(row, 'linkedin_url') || null,
-            hq_location: getFieldValue(row, 'hq_location') || '',
-            location_city: getFieldValue(row, 'location_city') || '',
-            location_state: getFieldValue(row, 'location_state') || '',
-            location_region: getFieldValue(row, 'location_region') || '',
-            size_range: getFieldValue(row, 'size_range') || '',
-            headcount: parseNumber(getFieldValue(row, 'headcount')),
-            revenue: getFieldValue(row, 'revenue') || null,
-            phone_number: getFieldValue(row, 'phone_number') || null,
-            company_keywords: parseArray(getFieldValue(row, 'company_keywords')),
-            industry_keywords: parseArray(getFieldValue(row, 'industry_keywords')),
-            technologies_used: parseArray(getFieldValue(row, 'technologies_used')),
-            visible_to_tiers: ['free'] // Default visibility
-          };
-          successfulData.push(companyData);
-        } else {
-          // For contacts, we need to find or create the company first
-          const companyName = getFieldValue(row, 'company_name');
-          let companyId: string | null = null;
-
-          if (companyName) {
-            // Try to find existing company
-            const { data: existingCompany } = await supabase
-              .from('companies')
-              .select('company_id')
-              .eq('company_name', companyName)
-              .single();
-
-            if (existingCompany) {
-              companyId = existingCompany.company_id;
-            } else {
-              // Create new company
-              const { data: newCompany, error: companyError } = await supabase
-                .from('companies')
-                .insert({
-                  company_name: companyName,
-                  visible_to_tiers: ['free']
-                })
-                .select('company_id')
-                .single();
-
-              if (newCompany && !companyError) {
-                companyId = newCompany.company_id;
-              }
-            }
-          }
-
-          if (companyId) {
-            const contactData: ContactInsert = {
-              name: getFieldValue(row, 'name') || '',
+        try {
+          if (uploadType === 'companies') {
+            const companyData: CompanyInsert = {
+              company_name: getFieldValue(row, 'company_name') || '',
+              company_type: getFieldValue(row, 'company_type') || 'Private',
+              industry: getFieldValue(row, 'industry') || 'Technology',
+              website: getFieldValue(row, 'website') || null,
               linkedin_url: getFieldValue(row, 'linkedin_url') || null,
-              job_title: getFieldValue(row, 'job_title') || '',
-              company_id: companyId,
-              start_date: getFieldValue(row, 'start_date') || null,
-              email: getFieldValue(row, 'email') || null,
-              email_score: parseNumber(getFieldValue(row, 'email_score')),
-              phone_number: getFieldValue(row, 'phone_number') || null,
+              hq_location: getFieldValue(row, 'hq_location') || getFieldValue(row, 'location_city') || '',
               location_city: getFieldValue(row, 'location_city') || '',
               location_state: getFieldValue(row, 'location_state') || '',
-              location_region: getFieldValue(row, 'location_region') || '',
-              visible_to_tiers: ['free'] // Default visibility
+              location_region: getFieldValue(row, 'location_region') || 'North America',
+              size_range: getFieldValue(row, 'size_range') || '1-50',
+              headcount: parseNumber(getFieldValue(row, 'headcount')),
+              revenue: getFieldValue(row, 'revenue') || null,
+              phone_number: getFieldValue(row, 'phone_number') || null,
+              company_keywords: parseArray(getFieldValue(row, 'company_keywords')),
+              industry_keywords: parseArray(getFieldValue(row, 'industry_keywords')),
+              technologies_used: parseArray(getFieldValue(row, 'technologies_used')),
+              visible_to_tiers: ['free', 'pro', 'enterprise'] // Make visible to all tiers
             };
-            successfulData.push(contactData);
+
+            console.log('Inserting company data:', companyData);
+
+            const { data, error } = await supabase
+              .from('companies')
+              .insert(companyData)
+              .select();
+
+            if (error) {
+              console.error('Company insert error:', error);
+              rowErrors.push({
+                row: i + 1,
+                field: 'database',
+                value: '',
+                error: `Database error: ${error.message}`
+              });
+              failedRowsData.push({
+                row_index: i,
+                original_data: row,
+                errors: rowErrors
+              });
+              errors.push(...rowErrors);
+            } else {
+              console.log('Company inserted successfully:', data);
+              successfulCount++;
+            }
+
+          } else {
+            // For contacts, we need to find or create the company first
+            const companyName = getFieldValue(row, 'company_name');
+            let companyId: string | null = null;
+
+            if (companyName) {
+              // Try to find existing company
+              const { data: existingCompany } = await supabase
+                .from('companies')
+                .select('company_id')
+                .eq('company_name', companyName)
+                .single();
+
+              if (existingCompany) {
+                companyId = existingCompany.company_id;
+              } else {
+                // Create new company
+                const { data: newCompany, error: companyError } = await supabase
+                  .from('companies')
+                  .insert({
+                    company_name: companyName,
+                    company_type: 'Private',
+                    industry: 'Technology',
+                    hq_location: getFieldValue(row, 'location_city') || '',
+                    location_city: getFieldValue(row, 'location_city') || '',
+                    location_state: getFieldValue(row, 'location_state') || '',
+                    location_region: getFieldValue(row, 'location_region') || 'North America',
+                    size_range: '1-50',
+                    visible_to_tiers: ['free', 'pro', 'enterprise']
+                  })
+                  .select('company_id')
+                  .single();
+
+                if (newCompany && !companyError) {
+                  companyId = newCompany.company_id;
+                } else {
+                  console.error('Error creating company:', companyError);
+                }
+              }
+            }
+
+            if (companyId) {
+              const contactData: ContactInsert = {
+                name: getFieldValue(row, 'name') || '',
+                linkedin_url: getFieldValue(row, 'linkedin_url') || null,
+                job_title: getFieldValue(row, 'job_title') || '',
+                company_id: companyId,
+                start_date: getFieldValue(row, 'start_date') || null,
+                email: getFieldValue(row, 'email') || null,
+                email_score: parseNumber(getFieldValue(row, 'email_score')),
+                phone_number: getFieldValue(row, 'phone_number') || null,
+                location_city: getFieldValue(row, 'location_city') || '',
+                location_state: getFieldValue(row, 'location_state') || '',
+                location_region: getFieldValue(row, 'location_region') || 'North America',
+                visible_to_tiers: ['free', 'pro', 'enterprise'] // Make visible to all tiers
+              };
+
+              console.log('Inserting contact data:', contactData);
+
+              const { data, error } = await supabase
+                .from('contacts')
+                .insert(contactData)
+                .select();
+
+              if (error) {
+                console.error('Contact insert error:', error);
+                rowErrors.push({
+                  row: i + 1,
+                  field: 'database',
+                  value: '',
+                  error: `Database error: ${error.message}`
+                });
+                failedRowsData.push({
+                  row_index: i,
+                  original_data: row,
+                  errors: rowErrors
+                });
+                errors.push(...rowErrors);
+              } else {
+                console.log('Contact inserted successfully:', data);
+                successfulCount++;
+              }
+            } else {
+              rowErrors.push({
+                row: i + 1,
+                field: 'company_name',
+                value: companyName,
+                error: 'Could not find or create company'
+              });
+              failedRowsData.push({
+                row_index: i,
+                original_data: row,
+                errors: rowErrors
+              });
+              errors.push(...rowErrors);
+            }
           }
-        }
-      }
-
-      // Insert successful data
-      let addedCount = 0;
-      if (successfulData.length > 0) {
-        const { data, error } = await supabase
-          .from(uploadType)
-          .insert(successfulData);
-
-        if (!error) {
-          addedCount = successfulData.length;
+        } catch (error) {
+          console.error('Row processing error:', error);
+          rowErrors.push({
+            row: i + 1,
+            field: 'processing',
+            value: '',
+            error: `Processing error: ${error}`
+          });
+          failedRowsData.push({
+            row_index: i,
+            original_data: row,
+            errors: rowErrors
+          });
+          errors.push(...rowErrors);
         }
       }
 
       const result: UploadResult = {
         total_rows: dataRows.length,
-        added: addedCount,
+        added: successfulCount,
         updated: 0,
         failed: failedRowsData.length,
         errors: errors,
@@ -238,6 +323,7 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
         processing_time: 2.8
       };
 
+      console.log('Upload result:', result);
       setUploadResult(result);
     } catch (error) {
       console.error('Upload error:', error);
@@ -249,17 +335,17 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
 
   const getFieldValue = (row: string[], fieldName: string): string => {
     const columnIndex = mapping[fieldName] ? parseInt(mapping[fieldName], 10) : -1;
-    return columnIndex !== -1 && row[columnIndex] !== undefined ? row[columnIndex] : '';
+    return columnIndex !== -1 && row[columnIndex] !== undefined ? row[columnIndex].trim() : '';
   };
 
   const parseNumber = (value: string): number | null => {
-    if (!value) return null;
+    if (!value || value.trim() === '') return null;
     const num = parseFloat(value);
     return isNaN(num) ? null : num;
   };
 
   const parseArray = (value: string): string[] => {
-    if (!value) return [];
+    if (!value || value.trim() === '') return [];
     return value.split(';').map(item => item.trim()).filter(item => item);
   };
 
@@ -288,6 +374,8 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
   const handleViewUploadedData = () => {
     if (uploadType === 'companies' && onNavigateToCompanies) {
       onNavigateToCompanies();
+    } else if (uploadType === 'contacts' && onNavigateToContacts) {
+      onNavigateToContacts();
     }
   };
 
@@ -564,22 +652,12 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
               Upload Another File
             </button>
             
-            {uploadResult.added > 0 && uploadType === 'companies' && (
+            {uploadResult.added > 0 && (
               <button
                 onClick={handleViewUploadedData}
                 className="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-md hover:from-blue-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg"
               >
-                View Uploaded Companies
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </button>
-            )}
-            
-            {uploadResult.added > 0 && uploadType === 'contacts' && (
-              <button
-                onClick={() => {/* Navigate to contacts page */}}
-                className="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-blue-600 rounded-md hover:from-green-700 hover:to-blue-700 transition-all shadow-md hover:shadow-lg"
-              >
-                View Uploaded Contacts
+                View Uploaded {uploadType === 'companies' ? 'Companies' : 'Contacts'}
                 <ArrowRight className="w-4 h-4 ml-2" />
               </button>
             )}
