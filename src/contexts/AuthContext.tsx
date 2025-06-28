@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
 import { supabase, updateUserMetadata } from '../lib/supabase';
-import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
   user: User | null;
@@ -23,7 +22,6 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const navigate = useNavigate();
 
   useEffect(() => {
     // Get initial session
@@ -53,12 +51,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const createUserFromSupabaseUser = (supabaseUser: any): User => {
     const metadata = supabaseUser.user_metadata || {};
-    const tier = metadata.subscription_tier || 'free';
+    
+    // Special handling for admin@enrichx.com
+    const isAdmin = supabaseUser.email === 'admin@enrichx.com';
+    const role = isAdmin ? 'admin' : (metadata.role || 'subscriber');
+    const tier = isAdmin ? 'enterprise' : (metadata.subscription_tier || 'free');
+    
     return {
       id: supabaseUser.id,
       email: supabaseUser.email,
-      name: metadata.name || supabaseUser.email.split('@')[0],
-      role: metadata.role || 'subscriber',
+      name: metadata.name || (isAdmin ? 'Admin User' : supabaseUser.email.split('@')[0]),
+      role: role,
       subscription_tier: tier,
       credits_remaining: metadata.credits_remaining || getDefaultCredits(tier),
       credits_monthly_limit: getDefaultCredits(tier),
@@ -70,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const getDefaultCredits = (tier: string) => {
     switch (tier) {
-      case 'enterprise': return 1000;
+      case 'enterprise': return 10000;
       case 'pro': return 500;
       case 'free': return 50;
       default: return 50;
@@ -83,7 +86,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       // If subscriptionTier is provided, this is a sign-up attempt
       if (subscriptionTier) {
-        // Only allow admin@enrichx.com to have admin role
         const role = email === 'admin@enrichx.com' ? 'admin' : 'subscriber';
         const tier = email === 'admin@enrichx.com' ? 'enterprise' : subscriptionTier;
         
@@ -118,6 +120,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (signInError) throw signInError;
         
         if (signInData.user) {
+          // Update metadata for admin if needed
+          if (email === 'admin@enrichx.com') {
+            await updateUserMetadata({
+              role: 'admin',
+              subscription_tier: 'enterprise',
+              credits_remaining: 10000,
+              name: 'Admin User'
+            });
+          }
+          
           const userData = createUserFromSupabaseUser(signInData.user);
           setUser(userData);
           return userData;

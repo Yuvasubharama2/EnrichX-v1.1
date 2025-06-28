@@ -23,10 +23,13 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
       const result = await login(email, password, isSignUp ? subscriptionTier : undefined);
       
       // Check if this is admin login (not signup) and show dashboard choice
-      if (email === 'admin@enrichx.com' && !isSignUp) {
+      if (email === 'admin@enrichx.com' && !isSignUp && result?.role === 'admin') {
         setShowDashboardChoice(true);
+      } else if (result?.role === 'admin') {
+        // Admin signup or other admin login - go to admin dashboard
+        navigate('/dashboard');
       } else {
-        // Regular user or signup - go to search dashboard
+        // Regular user - go to search dashboard
         navigate('/search');
       }
     } catch (error) {

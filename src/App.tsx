@@ -13,7 +13,6 @@ import UserCompaniesPage from './components/UserCompaniesPage';
 import SavedLists from './components/SavedLists';
 import BillingPage from './components/BillingPage';
 import LandingPage from './components/LandingPage';
-import AdminProtectedRoute from './components/AdminProtectedRoute';
 
 function AdminApp() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -139,16 +138,11 @@ function AppContent() {
   }
 
   if (!user) {
-    return <LandingPage />;
+    return <Navigate to="/" replace />;
   }
 
-  return user.role === 'admin' ? (
-    <AdminProtectedRoute>
-      <AdminApp />
-    </AdminProtectedRoute>
-  ) : (
-    <UserApp />
-  );
+  // For authenticated users, render based on current route
+  return null;
 }
 
 function App() {
@@ -158,10 +152,52 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<LoginPage isSignup={true} />} />
+        
+        {/* Admin Routes */}
+        <Route path="/dashboard" element={
+          <ProtectedRoute requireAdmin>
+            <AdminApp />
+          </ProtectedRoute>
+        } />
+        
+        {/* User Routes */}
+        <Route path="/search" element={
+          <ProtectedRoute>
+            <UserApp />
+          </ProtectedRoute>
+        } />
+        
+        {/* Fallback for authenticated users */}
         <Route path="/*" element={<AppContent />} />
       </Routes>
     </AuthProvider>
   );
+}
+
+// Protected Route Component
+function ProtectedRoute({ children, requireAdmin = false }: { children: React.ReactNode; requireAdmin?: boolean }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (requireAdmin && user.role !== 'admin') {
+    return <Navigate to="/search" replace />;
+  }
+
+  return <>{children}</>;
 }
 
 export default App;
