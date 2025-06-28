@@ -52,7 +52,7 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -63,7 +63,7 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
 
       {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 lg:translate-x-0 lg:static lg:inset-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 lg:translate-x-0 lg:static lg:w-64 lg:flex-shrink-0 flex flex-col ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -114,7 +114,7 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
         </div>
 
         {/* Navigation */}
-        <nav className="mt-6 px-4">
+        <nav className="mt-6 px-4 flex-auto">
           <div className="space-y-1">
             {navigation.map((item) => {
               const Icon = item.icon;
@@ -162,7 +162,7 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
         </nav>
 
         {/* Logout */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
+        <div className="p-4 border-t border-gray-200">
           <button
             onClick={handleSignOut}
             className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
@@ -173,8 +173,8 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
         </div>
       </div>
 
-      {/* Main content */}
-      <div className="lg:pl-64">
+      {/* Main content area */}
+      <div className="flex flex-col flex-grow">
         {/* Top header */}
         <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
@@ -202,8 +202,10 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
           </div>
         </div>
 
-        {/* Page content */}
-        <main>{children}</main>
+        {/* Page content - Fixed: Removed extra padding */}
+        <main className="flex-grow">
+          {children}
+        </main>
       </div>
     </div>
   );

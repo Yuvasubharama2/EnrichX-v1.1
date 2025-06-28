@@ -126,6 +126,7 @@ function AppContent() {
     return <LandingPage />;
   }
 
+  // Fixed: Check user role properly to route admin users to admin dashboard
   return user.role === 'admin' ? <AdminApp /> : <UserApp />;
 }
 
