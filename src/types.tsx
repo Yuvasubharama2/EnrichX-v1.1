@@ -34,3 +34,7 @@ export interface UploadResult {
   failed_rows_data: FailedRowData[]; // Data for rows that failed processing
   processing_time: number;
 }
+
+export interface CSVMapping {
+  [key: string]: string; // Maps field names to column indices
+}

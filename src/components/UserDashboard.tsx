@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, Star, Building2, Mail, Phone, MapPin, ExternalLink } from 'lucide-react';
+import { Search, Filter, Download, Plus, Star, Building2, Mail, Phone, MapPin, ExternalLink, Globe } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 import { useAuth } from '../contexts/AuthContext';
@@ -63,6 +63,14 @@ export default function UserDashboard() {
     contact.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     contact.company?.company_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const formatWebsiteUrl = (website: string | null) => {
+    if (!website) return null;
+    if (website.startsWith('http://') || website.startsWith('https://')) {
+      return website;
+    }
+    return `https://${website}`;
+  };
 
   if (loading) {
     return (
@@ -219,7 +227,18 @@ export default function UserDashboard() {
                       <div className="flex items-center space-x-4 text-sm text-gray-600 mb-3">
                         <div className="flex items-center">
                           <Building2 className="w-4 h-4 mr-1" />
-                          {contact.company?.company_name || 'Unknown Company'}
+                          <span>{contact.company?.company_name || 'Unknown Company'}</span>
+                          {contact.company?.website && (
+                            <a
+                              href={formatWebsiteUrl(contact.company.website)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ml-2 text-gray-400 hover:text-blue-600 transition-colors"
+                              title="Visit company website"
+                            >
+                              <Globe className="w-3 h-3" />
+                            </a>
+                          )}
                         </div>
                         <div className="flex items-center">
                           <MapPin className="w-4 h-4 mr-1" />
@@ -259,7 +278,20 @@ export default function UserDashboard() {
                   {contact.company && (
                     <div className="mt-4 p-4 bg-gray-50 rounded-lg">
                       <div className="flex items-center justify-between mb-2">
-                        <h5 className="font-medium text-gray-900">{contact.company.company_name}</h5>
+                        <div className="flex items-center space-x-2">
+                          <h5 className="font-medium text-gray-900">{contact.company.company_name}</h5>
+                          {contact.company.website && (
+                            <a
+                              href={formatWebsiteUrl(contact.company.website)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-gray-400 hover:text-blue-600 transition-colors"
+                              title="Visit company website"
+                            >
+                              <Globe className="w-4 h-4" />
+                            </a>
+                          )}
+                        </div>
                         <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
                           {contact.company.size_range} employees
                         </span>

@@ -79,25 +79,72 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
 
       const filteredRows = rawRows.filter((row, index) => {
         if (index === 0) return true;
-        return row.some(cell => cell !== '');
+        return row.some(cell => cell !== '' && cell !== '-');
       });
 
       setCsvData(filteredRows);
       setStep('preview');
 
-      // Auto-map columns
+      // Auto-map columns with better matching
       const headers = filteredRows[0];
       const autoMapping: CSVMapping = {};
+      
       headers.forEach((header, index) => {
         const normalizedHeader = header.toLowerCase().replace(/[^a-z0-9]/g, '_');
-        const matchedField = currentFields.find(field =>
-          field.includes(normalizedHeader) || normalizedHeader.includes(field.replace('_', ''))
-        );
-        if (matchedField) {
+        
+        // Exact matches first
+        let matchedField = currentFields.find(field => field === normalizedHeader);
+        
+        // Partial matches if no exact match
+        if (!matchedField) {
+          matchedField = currentFields.find(field => {
+            const fieldParts = field.split('_');
+            const headerParts = normalizedHeader.split('_');
+            return fieldParts.some(part => headerParts.includes(part)) ||
+                   headerParts.some(part => fieldParts.includes(part));
+          });
+        }
+        
+        // Special cases for common variations
+        if (!matchedField) {
+          const specialMappings: Record<string, string> = {
+            'full_name': 'name',
+            'contact_name': 'name',
+            'person_name': 'name',
+            'first_name': 'name',
+            'company': 'company_name',
+            'organization': 'company_name',
+            'employer': 'company_name',
+            'title': 'job_title',
+            'position': 'job_title',
+            'role': 'job_title',
+            'designation': 'job_title',
+            'email_address': 'email',
+            'mail': 'email',
+            'phone': 'phone_number',
+            'mobile': 'phone_number',
+            'tel': 'phone_number',
+            'city': 'location_city',
+            'state': 'location_state',
+            'region': 'location_region',
+            'country': 'location_region',
+            'linkedin': 'linkedin_url',
+            'linkedin_profile': 'linkedin_url',
+            'site': 'website',
+            'url': 'website',
+            'homepage': 'website'
+          };
+          
+          matchedField = specialMappings[normalizedHeader];
+        }
+        
+        if (matchedField && currentFields.includes(matchedField)) {
           autoMapping[matchedField] = index.toString();
         }
       });
+      
       setMapping(autoMapping);
+      console.log('Auto-mapped fields:', autoMapping);
     };
     reader.readAsText(file);
   };
@@ -115,6 +162,7 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
       console.log('Starting upload process...');
       console.log('Data rows to process:', dataRows.length);
       console.log('Upload type:', uploadType);
+      console.log('Field mapping:', mapping);
 
       // Process each row
       for (let i = 0; i < dataRows.length; i++) {
@@ -128,7 +176,9 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
           const columnIndex = mapping[field] ? parseInt(mapping[field], 10) : -1;
           const cellValue = columnIndex !== -1 && row[columnIndex] !== undefined ? row[columnIndex] : '';
           
-          if (!cellValue || cellValue.trim() === '') {
+          console.log(`Checking required field ${field}: columnIndex=${columnIndex}, value="${cellValue}"`);
+          
+          if (!cellValue || cellValue.trim() === '' || cellValue === '-') {
             rowErrors.push({
               row: i + 1,
               field: field,
@@ -204,7 +254,9 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
             const companyName = getFieldValue(row, 'company_name');
             let companyId: string | null = null;
 
-            if (companyName) {
+            console.log('Processing contact with company name:', companyName);
+
+            if (companyName && companyName.trim() !== '' && companyName !== '-') {
               // Try to find existing company
               const { data: existingCompany } = await supabase
                 .from('companies')
@@ -214,8 +266,10 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
 
               if (existingCompany) {
                 companyId = existingCompany.company_id;
+                console.log('Found existing company:', companyId);
               } else {
                 // Create new company
+                console.log('Creating new company:', companyName);
                 const { data: newCompany, error: companyError } = await supabase
                   .from('companies')
                   .insert({
@@ -234,6 +288,7 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
 
                 if (newCompany && !companyError) {
                   companyId = newCompany.company_id;
+                  console.log('Created new company:', companyId);
                 } else {
                   console.error('Error creating company:', companyError);
                 }
@@ -335,18 +390,19 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
 
   const getFieldValue = (row: string[], fieldName: string): string => {
     const columnIndex = mapping[fieldName] ? parseInt(mapping[fieldName], 10) : -1;
-    return columnIndex !== -1 && row[columnIndex] !== undefined ? row[columnIndex].trim() : '';
+    const value = columnIndex !== -1 && row[columnIndex] !== undefined ? row[columnIndex].trim() : '';
+    return value === '-' ? '' : value;
   };
 
   const parseNumber = (value: string): number | null => {
-    if (!value || value.trim() === '') return null;
+    if (!value || value.trim() === '' || value === '-') return null;
     const num = parseFloat(value);
     return isNaN(num) ? null : num;
   };
 
   const parseArray = (value: string): string[] => {
-    if (!value || value.trim() === '') return [];
-    return value.split(';').map(item => item.trim()).filter(item => item);
+    if (!value || value.trim() === '' || value === '-') return [];
+    return value.split(';').map(item => item.trim()).filter(item => item && item !== '-');
   };
 
   const downloadTemplate = () => {
@@ -492,8 +548,35 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
       {step === 'preview' && csvData.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium text-gray-900">Preview Data</h3>
+            <h3 className="text-lg font-medium text-gray-900">Preview Data & Field Mapping</h3>
             <span className="text-sm text-gray-600">{csvData.length > 0 ? csvData.length - 1 : 0} rows detected</span>
+          </div>
+
+          {/* Field Mapping Section */}
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h4 className="text-sm font-medium text-blue-900 mb-3">Field Mapping</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {currentFields.map((field) => (
+                <div key={field} className="flex items-center space-x-2">
+                  <label className="text-xs font-medium text-gray-700 w-24 capitalize">
+                    {field.replace('_', ' ')}
+                    {requiredFields.includes(field) && <span className="text-red-500">*</span>}:
+                  </label>
+                  <select
+                    value={mapping[field] || ''}
+                    onChange={(e) => setMapping(prev => ({ ...prev, [field]: e.target.value }))}
+                    className="flex-1 text-xs border border-gray-300 rounded px-2 py-1"
+                  >
+                    <option value="">-- Select Column --</option>
+                    {csvData[0]?.map((header, index) => (
+                      <option key={index} value={index.toString()}>
+                        {header} (Column {index + 1})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="overflow-x-auto mb-6">

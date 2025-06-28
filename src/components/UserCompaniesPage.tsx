@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, Star, Building2, ExternalLink, MapPin, Users } from 'lucide-react';
+import { Search, Filter, Download, Plus, Star, Building2, ExternalLink, MapPin, Users, Globe } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 import { useAuth } from '../contexts/AuthContext';
@@ -57,6 +57,14 @@ export default function UserCompaniesPage() {
     company.industry.toLowerCase().includes(searchQuery.toLowerCase()) ||
     company.location_city.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const formatWebsiteUrl = (website: string | null) => {
+    if (!website) return null;
+    if (website.startsWith('http://') || website.startsWith('https://')) {
+      return website;
+    }
+    return `https://${website}`;
+  };
 
   if (loading) {
     return (
@@ -198,8 +206,21 @@ export default function UserCompaniesPage() {
                         <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                           <Building2 className="w-6 h-6 text-blue-600" />
                         </div>
-                        <div>
-                          <h4 className="text-lg font-semibold text-gray-900">{company.company_name}</h4>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <h4 className="text-lg font-semibold text-gray-900">{company.company_name}</h4>
+                            {company.website && (
+                              <a
+                                href={formatWebsiteUrl(company.website)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                                title="Visit company website"
+                              >
+                                <Globe className="w-4 h-4" />
+                              </a>
+                            )}
+                          </div>
                           <div className="flex items-center space-x-4 text-sm text-gray-600">
                             <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">
                               {company.company_type}
@@ -227,12 +248,12 @@ export default function UserCompaniesPage() {
                         {company.website && (
                           <div className="flex items-center text-sm">
                             <a
-                              href={company.website}
+                              href={formatWebsiteUrl(company.website)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:text-blue-700 flex items-center"
                             >
-                              <ExternalLink className="w-4 h-4 mr-1" />
+                              <Globe className="w-4 h-4 mr-1" />
                               Website
                             </a>
                           </div>
