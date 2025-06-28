@@ -218,50 +218,88 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
   const normalizeWebsite = (website: string): string => {
     if (!website) return '';
     
-    // Remove protocol and www
+    // Remove protocol, www, and trailing slash
     let normalized = website.toLowerCase()
       .replace(/^https?:\/\//, '')
       .replace(/^www\./, '')
-      .replace(/\/$/, ''); // Remove trailing slash
+      .replace(/\/$/, '');
     
     return normalized;
   };
 
-  // Function to find company by website domain
-  const findCompanyByWebsite = async (website: string, companyName: string) => {
-    if (!website) return null;
+  // Enhanced function to find company by website domain or name
+  const findExistingCompany = async (companyName: string, companyWebsite?: string) => {
+    console.log(`Looking for existing company: "${companyName}" with website: "${companyWebsite}"`);
     
-    const normalizedWebsite = normalizeWebsite(website);
-    
-    // First try to find by exact website match
-    const { data: exactMatch } = await supabase
-      .from('companies')
-      .select('company_id, website')
-      .not('website', 'is', null)
-      .limit(100); // Get all companies with websites
-    
-    if (exactMatch) {
-      for (const company of exactMatch) {
-        if (company.website && normalizeWebsite(company.website) === normalizedWebsite) {
-          console.log(`Found company by website match: ${company.company_id}`);
+    try {
+      // First, get all companies to search through them
+      const { data: allCompanies, error } = await supabase
+        .from('companies')
+        .select('company_id, company_name, website');
+
+      if (error) {
+        console.error('Error fetching companies:', error);
+        return null;
+      }
+
+      if (!allCompanies || allCompanies.length === 0) {
+        console.log('No companies found in database');
+        return null;
+      }
+
+      console.log(`Searching through ${allCompanies.length} companies`);
+
+      // If website is provided, try to match by normalized website domain first
+      if (companyWebsite && companyWebsite.trim() !== '' && companyWebsite !== '-') {
+        const normalizedInputWebsite = normalizeWebsite(companyWebsite);
+        console.log(`Normalized input website: "${normalizedInputWebsite}"`);
+        
+        for (const company of allCompanies) {
+          if (company.website) {
+            const normalizedCompanyWebsite = normalizeWebsite(company.website);
+            console.log(`Comparing with company "${company.company_name}" website: "${normalizedCompanyWebsite}"`);
+            
+            if (normalizedInputWebsite === normalizedCompanyWebsite) {
+              console.log(`✅ Found company by website match: ${company.company_name} (${company.company_id})`);
+              return company.company_id;
+            }
+          }
+        }
+      }
+
+      // If no website match, try exact company name match
+      const exactNameMatch = allCompanies.find(company => 
+        company.company_name.toLowerCase().trim() === companyName.toLowerCase().trim()
+      );
+      
+      if (exactNameMatch) {
+        console.log(`✅ Found company by exact name match: ${exactNameMatch.company_name} (${exactNameMatch.company_id})`);
+        return exactNameMatch.company_id;
+      }
+
+      // Try fuzzy name matching (remove common suffixes and prefixes)
+      const cleanInputName = companyName.toLowerCase()
+        .replace(/\b(inc|ltd|llc|corp|corporation|company|co|limited|pvt|private|solutions|technologies|tech)\b\.?/g, '')
+        .trim();
+
+      for (const company of allCompanies) {
+        const cleanCompanyName = company.company_name.toLowerCase()
+          .replace(/\b(inc|ltd|llc|corp|corporation|company|co|limited|pvt|private|solutions|technologies|tech)\b\.?/g, '')
+          .trim();
+        
+        if (cleanInputName === cleanCompanyName) {
+          console.log(`✅ Found company by fuzzy name match: ${company.company_name} (${company.company_id})`);
           return company.company_id;
         }
       }
+
+      console.log(`❌ No existing company found for: "${companyName}"`);
+      return null;
+      
+    } catch (error) {
+      console.error('Error in findExistingCompany:', error);
+      return null;
     }
-    
-    // If no website match, try by company name
-    const { data: nameMatch } = await supabase
-      .from('companies')
-      .select('company_id')
-      .eq('company_name', companyName)
-      .single();
-    
-    if (nameMatch) {
-      console.log(`Found company by name match: ${nameMatch.company_id}`);
-      return nameMatch.company_id;
-    }
-    
-    return null;
   };
 
   const handleUpload = async () => {
@@ -365,7 +403,7 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
             }
 
           } else {
-            // For contacts, we need to find or create the company first
+            // For contacts, find existing company first - DO NOT CREATE NEW COMPANIES
             const companyName = getFieldValue(row, 'company_name');
             const companyWebsite = getFieldValue(row, 'company_website');
             let companyId: string | null = null;
@@ -374,39 +412,42 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
 
             if (companyName && companyName.trim() !== '' && companyName !== '-') {
               // Try to find existing company by website first, then by name
-              companyId = await findCompanyByWebsite(companyWebsite, companyName);
+              companyId = await findExistingCompany(companyName, companyWebsite);
 
               if (!companyId) {
-                // Create new company
-                console.log('Creating new company:', companyName);
-                const newCompanyData: CompanyInsert = {
-                  company_name: companyName,
-                  company_type: 'Private',
-                  industry: 'Technology',
-                  website: companyWebsite || null,
-                  hq_location: getFieldValue(row, 'location_city') || '',
-                  location_city: getFieldValue(row, 'location_city') || '',
-                  location_state: getFieldValue(row, 'location_state') || '',
-                  location_region: getFieldValue(row, 'location_region') || 'North America',
-                  size_range: '1-50',
-                  visible_to_tiers: ['free', 'pro', 'enterprise']
-                };
-
-                const { data: newCompany, error: companyError } = await supabase
-                  .from('companies')
-                  .insert(newCompanyData)
-                  .select('company_id')
-                  .single();
-
-                if (newCompany && !companyError) {
-                  companyId = newCompany.company_id;
-                  console.log('Created new company:', companyId);
-                } else {
-                  console.error('Error creating company:', companyError);
-                }
+                // Company not found - add to failed rows instead of creating new company
+                console.log(`❌ Company "${companyName}" not found. Contact will be skipped.`);
+                rowErrors.push({
+                  row: i + 1,
+                  field: 'company_name',
+                  value: companyName,
+                  error: `Company "${companyName}" not found in database. Please upload company data first or ensure company website matches existing records.`
+                });
+                failedRowsData.push({
+                  row_index: i,
+                  original_data: row,
+                  errors: rowErrors
+                });
+                errors.push(...rowErrors);
+                continue;
               }
+            } else {
+              rowErrors.push({
+                row: i + 1,
+                field: 'company_name',
+                value: companyName,
+                error: 'Company name is required'
+              });
+              failedRowsData.push({
+                row_index: i,
+                original_data: row,
+                errors: rowErrors
+              });
+              errors.push(...rowErrors);
+              continue;
             }
 
+            // If we have a valid company ID, create the contact
             if (companyId) {
               // Parse the start_date with enhanced date parsing
               const startDateValue = getFieldValue(row, 'start_date');
@@ -456,19 +497,6 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
                 console.log('Contact inserted successfully:', data);
                 successfulCount++;
               }
-            } else {
-              rowErrors.push({
-                row: i + 1,
-                field: 'company_name',
-                value: companyName,
-                error: 'Could not find or create company'
-              });
-              failedRowsData.push({
-                row_index: i,
-                original_data: row,
-                errors: rowErrors
-              });
-              errors.push(...rowErrors);
             }
           }
         } catch (error) {
@@ -591,6 +619,21 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
       {/* Enhanced Info Sections */}
       {uploadType === 'contacts' && (
         <div className="mb-6 space-y-4">
+          {/* Important Notice */}
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <h4 className="text-sm font-medium text-amber-900 mb-2">⚠️ Important: Company Data Required</h4>
+            <div className="text-sm text-amber-800 space-y-1">
+              <p><strong>Contacts will only be imported if their companies already exist in the database.</strong></p>
+              <p>The system will:</p>
+              <ul className="list-disc list-inside ml-4 space-y-1">
+                <li>First try to match companies by website domain</li>
+                <li>Then try to match by exact company name</li>
+                <li><strong>Skip contacts if no matching company is found</strong></li>
+              </ul>
+              <p className="mt-2"><strong>Recommendation:</strong> Upload company data first, then upload contacts.</p>
+            </div>
+          </div>
+
           {/* Date Format Info */}
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <h4 className="text-sm font-medium text-blue-900 mb-2">📅 Date Format Guidelines</h4>
@@ -599,7 +642,7 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
               <ul className="list-disc list-inside ml-4 space-y-1">
                 <li><code>MM YYYY</code> - e.g., "01 2024", "12 2023" (shows as MM YYYY)</li>
                 <li><code>YYYY</code> - e.g., "2024", "2023" (shows as YYYY only)</li>
-                <li><code>MM/YYYY</code> - e.g., "01/2024", \"12/2023"</li>
+                <li><code>MM/YYYY</code> - e.g., "01/2024", "12/2023"</li>
                 <li><code>MM-YYYY</code> - e.g., "01-2024", "12-2023"</li>
                 <li>Standard dates - e.g., "2024-01-15", "01/15/2024"</li>
               </ul>
@@ -619,7 +662,7 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
               <ul className="list-disc list-inside ml-4 space-y-1">
                 <li>System first tries to match companies by website domain</li>
                 <li>If no website match, falls back to company name matching</li>
-                <li>Only creates new company if no match is found</li>
+                <li><strong>No new companies are created during contact upload</strong></li>
                 <li>Prevents duplicate companies with same domain</li>
               </ul>
             </div>
