@@ -18,12 +18,22 @@ function AdminApp() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [uploadType, setUploadType] = useState<'companies' | 'contacts'>('companies');
 
+  const handleNavigateToCompanies = () => {
+    setActiveTab('companies');
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard />;
       case 'upload':
-        return <CSVUpload uploadType={uploadType} onUploadTypeChange={setUploadType} />;
+        return (
+          <CSVUpload 
+            uploadType={uploadType} 
+            onUploadTypeChange={setUploadType}
+            onNavigateToCompanies={handleNavigateToCompanies}
+          />
+        );
       case 'companies':
         return <AdminCompaniesPage />;
       case 'contacts':

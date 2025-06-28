@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, CheckCircle, XCircle, AlertCircle, Download } from 'lucide-react';
+import { Upload, FileText, CheckCircle, XCircle, AlertCircle, Download, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 import { UploadResult, CSVMapping, UploadError, FailedRowData } from '../types';
@@ -7,12 +7,13 @@ import { UploadResult, CSVMapping, UploadError, FailedRowData } from '../types';
 interface CSVUploadProps {
   uploadType: 'companies' | 'contacts';
   onUploadTypeChange: (type: 'companies' | 'contacts') => void;
+  onNavigateToCompanies?: () => void;
 }
 
 type CompanyInsert = Database['public']['Tables']['companies']['Insert'];
 type ContactInsert = Database['public']['Tables']['contacts']['Insert'];
 
-export default function CSVUpload({ uploadType, onUploadTypeChange }: CSVUploadProps) {
+export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateToCompanies }: CSVUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [csvData, setCsvData] = useState<string[][]>([]);
   const [mapping, setMapping] = useState<CSVMapping>({});
@@ -281,6 +282,12 @@ export default function CSVUpload({ uploadType, onUploadTypeChange }: CSVUploadP
     setStep('upload');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleViewUploadedData = () => {
+    if (uploadType === 'companies' && onNavigateToCompanies) {
+      onNavigateToCompanies();
     }
   };
 
@@ -556,6 +563,26 @@ export default function CSVUpload({ uploadType, onUploadTypeChange }: CSVUploadP
             >
               Upload Another File
             </button>
+            
+            {uploadResult.added > 0 && uploadType === 'companies' && (
+              <button
+                onClick={handleViewUploadedData}
+                className="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-md hover:from-blue-700 hover:to-purple-700 transition-all shadow-md hover:shadow-lg"
+              >
+                View Uploaded Companies
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </button>
+            )}
+            
+            {uploadResult.added > 0 && uploadType === 'contacts' && (
+              <button
+                onClick={() => {/* Navigate to contacts page */}}
+                className="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-blue-600 rounded-md hover:from-green-700 hover:to-blue-700 transition-all shadow-md hover:shadow-lg"
+              >
+                View Uploaded Contacts
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </button>
+            )}
           </div>
         </div>
       )}
