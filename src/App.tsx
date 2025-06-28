@@ -126,8 +126,9 @@ function AppContent() {
     return <LandingPage />;
   }
 
-  // Fixed: Check user role properly to route admin users to admin dashboard
-  return user.role === 'admin' ? <AdminApp /> : <UserApp />;
+  // Admin users can access both dashboards, but this is handled by routing
+  // Regular users only get user dashboard
+  return <UserApp />;
 }
 
 function App() {
@@ -137,6 +138,8 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<LoginPage isSignup={true} />} />
+        <Route path="/dashboard" element={<AdminApp />} />
+        <Route path="/search" element={<AppContent />} />
         <Route path="/*" element={<AppContent />} />
       </Routes>
     </AuthProvider>

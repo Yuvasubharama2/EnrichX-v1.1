@@ -12,7 +12,8 @@ import {
   X,
   Star,
   Download,
-  ArrowLeft
+  ArrowLeft,
+  Shield
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -49,6 +50,10 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
 
   const handleGoHome = () => {
     navigate('/');
+  };
+
+  const handleAdminDashboard = () => {
+    navigate('/dashboard');
   };
 
   return (
@@ -112,6 +117,19 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
             </div>
           </div>
         </div>
+
+        {/* Admin Dashboard Access */}
+        {user?.email === 'admin@enrichx.com' && (
+          <div className="p-4 border-b border-gray-200">
+            <button
+              onClick={handleAdminDashboard}
+              className="w-full flex items-center px-4 py-3 text-left bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg hover:from-purple-100 hover:to-blue-100 transition-colors"
+            >
+              <Shield className="w-5 h-5 mr-3 text-purple-600" />
+              <span className="text-sm font-medium text-purple-700">Admin Dashboard</span>
+            </button>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="mt-6 px-4 flex-auto">
@@ -202,7 +220,7 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
           </div>
         </div>
 
-        {/* Page content - Fixed: Removed extra padding */}
+        {/* Page content */}
         <main className="flex-grow">
           {children}
         </main>

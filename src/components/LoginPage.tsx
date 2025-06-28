@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Database, Mail, Lock, Eye, EyeOff, Check } from 'lucide-react';
+import { Database, Mail, Lock, Eye, EyeOff, Check, Settings, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,18 +13,101 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
   const [isSignUp, setIsSignUp] = useState(initialIsSignup);
   const [showPassword, setShowPassword] = useState(false);
   const [subscriptionTier, setSubscriptionTier] = useState('pro');
+  const [showDashboardChoice, setShowDashboardChoice] = useState(false);
+  const [pendingAuth, setPendingAuth] = useState<any>(null);
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await login(email, password, isSignUp ? subscriptionTier : undefined);
-      navigate(isSignUp ? '/upload' : '/search');
+      const result = await login(email, password, isSignUp ? subscriptionTier : undefined);
+      
+      // Check if this is admin login and show dashboard choice
+      if (email === 'admin@enrichx.com' && !isSignUp) {
+        setShowDashboardChoice(true);
+        setPendingAuth(result);
+      } else {
+        // Regular user or signup - go to appropriate dashboard
+        navigate(isSignUp ? '/search' : '/search');
+      }
     } catch (error) {
       console.error('Authentication failed:', error);
     }
   };
+
+  const handleDashboardChoice = (choice: 'admin' | 'user') => {
+    setShowDashboardChoice(false);
+    if (choice === 'admin') {
+      navigate('/dashboard');
+    } else {
+      navigate('/search');
+    }
+  };
+
+  if (showDashboardChoice) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl mb-4">
+              <Database className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Choose Dashboard</h1>
+            <p className="text-gray-600">
+              Select which dashboard you'd like to access
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+            <div className="space-y-4">
+              <button
+                onClick={() => handleDashboardChoice('admin')}
+                className="w-full flex items-center justify-between p-6 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-xl hover:from-blue-100 hover:to-purple-100 transition-all duration-200 group"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                    <Settings className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-lg font-semibold text-gray-900">Admin Dashboard</h3>
+                    <p className="text-sm text-gray-600">Manage data, uploads, and system settings</p>
+                  </div>
+                </div>
+                <div className="w-6 h-6 border-2 border-blue-400 rounded-full flex items-center justify-center group-hover:border-blue-600 transition-colors">
+                  <div className="w-2 h-2 bg-blue-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => handleDashboardChoice('user')}
+                className="w-full flex items-center justify-between p-6 bg-gray-50 border-2 border-gray-200 rounded-xl hover:bg-gray-100 transition-all duration-200 group"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-gray-600 rounded-lg flex items-center justify-center">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-lg font-semibold text-gray-900">User Dashboard</h3>
+                    <p className="text-sm text-gray-600">Search contacts and manage lists</p>
+                  </div>
+                </div>
+                <div className="w-6 h-6 border-2 border-gray-400 rounded-full flex items-center justify-center group-hover:border-gray-600 transition-colors">
+                  <div className="w-2 h-2 bg-gray-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                </div>
+              </button>
+            </div>
+
+            <div className="mt-6 text-center">
+              <p className="text-xs text-gray-500">
+                You can switch between dashboards anytime from the navigation
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
@@ -95,24 +178,37 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
             </div>
 
             {/* Subscription Tier Selection */}
-            {isSignUp && (
+            {isSignUp && email !== 'admin@enrichx.com' && (
               <div className="space-y-3">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Subscription Tier
+                  Select Subscription Plan
                 </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {['free', 'pro', 'enterprise'].map((tier) => (
+                <div className="space-y-3">
+                  {[
+                    { id: 'free', name: 'Free', credits: 50, price: '$0' },
+                    { id: 'pro', name: 'Pro', credits: 500, price: '$99' },
+                    { id: 'enterprise', name: 'Enterprise', credits: 1000, price: '$299' }
+                  ].map((tier) => (
                     <button
-                      key={tier}
+                      key={tier.id}
                       type="button"
-                      onClick={() => setSubscriptionTier(tier)}
-                      className={`px-4 py-3 rounded-lg text-sm font-medium capitalize transition-all ${
-                        subscriptionTier === tier
-                          ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md'
-                          : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                      onClick={() => setSubscriptionTier(tier.id)}
+                      className={`w-full p-4 rounded-lg text-left border-2 transition-all ${
+                        subscriptionTier === tier.id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
-                      {tier} plan
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-semibold text-gray-900">{tier.name}</h4>
+                          <p className="text-sm text-gray-600">{tier.credits} credits/month</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-gray-900">{tier.price}</p>
+                          <p className="text-xs text-gray-500">/month</p>
+                        </div>
+                      </div>
                     </button>
                   ))}
                 </div>

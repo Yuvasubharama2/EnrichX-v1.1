@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string, subscriptionTier?: string) => Promise<void>;
+  login: (email: string, password: string, subscriptionTier?: string) => Promise<any>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -53,14 +53,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const createUserFromSupabaseUser = (supabaseUser: any): User => {
     const metadata = supabaseUser.user_metadata || {};
+    const tier = metadata.subscription_tier || 'free';
     return {
       id: supabaseUser.id,
       email: supabaseUser.email,
       name: metadata.name || supabaseUser.email.split('@')[0],
       role: metadata.role || 'subscriber',
-      subscription_tier: metadata.subscription_tier || 'free',
-      credits_remaining: metadata.credits_remaining || getDefaultCredits(metadata.subscription_tier || 'free'),
-      credits_monthly_limit: getDefaultCredits(metadata.subscription_tier || 'free'),
+      subscription_tier: tier,
+      credits_remaining: metadata.credits_remaining || getDefaultCredits(tier),
+      credits_monthly_limit: getDefaultCredits(tier),
       subscription_status: metadata.subscription_status || 'active',
       created_at: new Date(supabaseUser.created_at),
       last_login: new Date()
@@ -69,9 +70,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const getDefaultCredits = (tier: string) => {
     switch (tier) {
-      case 'enterprise': return 10000;
-      case 'pro': return 2000;
-      case 'starter': return 500;
+      case 'enterprise': return 1000;
+      case 'pro': return 500;
+      case 'free': return 50;
       default: return 50;
     }
   };
@@ -82,8 +83,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       // If subscriptionTier is provided, this is a sign-up attempt
       if (subscriptionTier) {
+        // Only allow admin@enrichx.com to have admin role
         const role = email === 'admin@enrichx.com' ? 'admin' : 'subscriber';
-        const tier = subscriptionTier || (role === 'admin' ? 'enterprise' : 'free');
+        const tier = email === 'admin@enrichx.com' ? 'enterprise' : subscriptionTier;
         
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
@@ -104,6 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (signUpData.user) {
           const userData = createUserFromSupabaseUser(signUpData.user);
           setUser(userData);
+          return userData;
         }
       } else {
         // This is a sign-in attempt
@@ -117,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (signInData.user) {
           const userData = createUserFromSupabaseUser(signInData.user);
           setUser(userData);
+          return userData;
         }
       }
     } catch (error) {
