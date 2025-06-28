@@ -599,7 +599,7 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
               <ul className="list-disc list-inside ml-4 space-y-1">
                 <li><code>MM YYYY</code> - e.g., "01 2024", "12 2023" (shows as MM YYYY)</li>
                 <li><code>YYYY</code> - e.g., "2024", "2023" (shows as YYYY only)</li>
-                <li><code>MM/YYYY</code> - e.g., "01/2024", "12/2023"</li>
+                <li><code>MM/YYYY</code> - e.g., "01/2024", \"12/2023"</li>
                 <li><code>MM-YYYY</code> - e.g., "01-2024", "12-2023"</li>
                 <li>Standard dates - e.g., "2024-01-15", "01/15/2024"</li>
               </ul>
