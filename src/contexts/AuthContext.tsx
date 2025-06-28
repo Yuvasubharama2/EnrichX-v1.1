@@ -80,54 +80,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     
     try {
-      // Try to sign in first
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (signInError) {
-        // Only attempt sign up if subscriptionTier is explicitly provided
-        if (subscriptionTier && signInError.message.includes('Invalid login credentials')) {
-          // If sign in fails and subscriptionTier is provided, try to sign up
-          const role = email === 'admin@enrichx.com' ? 'admin' : 'subscriber';
-          const tier = subscriptionTier || (role === 'admin' ? 'enterprise' : 'free');
-          
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              data: {
-                name: email === 'admin@enrichx.com' ? 'Admin User' : 'User',
-                role,
-                subscription_tier: tier,
-                credits_remaining: getDefaultCredits(tier),
-                subscription_status: 'active'
-              }
-            }
-          });
-
-          if (signUpError) throw signUpError;
-          
-          if (signUpData.user) {
-            const userData = createUserFromSupabaseUser(signUpData.user);
-            setUser(userData);
-          }
-        } else {
-          // If no subscriptionTier provided or other error, throw the original error
-          throw signInError;
-        }
-      } else if (signInData.user) {
-        // Update user metadata if subscription tier is provided
-        if (subscriptionTier) {
-          await updateUserMetadata({
-            subscription_tier: subscriptionTier,
-            credits_remaining: getDefaultCredits(subscriptionTier)
-          });
-        }
+      // If subscriptionTier is provided, this is a sign-up attempt
+      if (subscriptionTier) {
+        const role = email === 'admin@enrichx.com' ? 'admin' : 'subscriber';
+        const tier = subscriptionTier || (role === 'admin' ? 'enterprise' : 'free');
         
-        const userData = createUserFromSupabaseUser(signInData.user);
-        setUser(userData);
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              name: email === 'admin@enrichx.com' ? 'Admin User' : 'User',
+              role,
+              subscription_tier: tier,
+              credits_remaining: getDefaultCredits(tier),
+              subscription_status: 'active'
+            }
+          }
+        });
+
+        if (signUpError) throw signUpError;
+        
+        if (signUpData.user) {
+          const userData = createUserFromSupabaseUser(signUpData.user);
+          setUser(userData);
+        }
+      } else {
+        // This is a sign-in attempt
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+
+        if (signInError) throw signInError;
+        
+        if (signInData.user) {
+          const userData = createUserFromSupabaseUser(signInData.user);
+          setUser(userData);
+        }
       }
     } catch (error) {
       console.error('Authentication error:', error);
