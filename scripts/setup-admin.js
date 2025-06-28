@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://pmvqrzillkzmpctjsgjo.supabase.co';
-const supabaseServiceKey = 'YOUR_SERVICE_ROLE_KEY_HERE'; // You'll need to get this from your Supabase dashboard
+const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtdnFyemlsbGt6bXBjdGpzZ2pvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTEwMTk5NywiZXhwIjoyMDY2Njc3OTk3fQ.ocU3VD6wbpFGkELdWTBB_B8nEsFV1NX7kdK5Q9NS7O0';
 
 // Create admin client with service role
 const supabase = createClient(supabaseUrl, supabaseServiceKey, {
