@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import Logo from './Logo';
 
 interface UserLayoutProps {
   children: React.ReactNode;
@@ -73,12 +74,7 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
         }`}
       >
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-              <Database className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-xl font-bold text-gray-900">EnrichX</h1>
-          </div>
+          <Logo size="md" showText={true} />
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100"

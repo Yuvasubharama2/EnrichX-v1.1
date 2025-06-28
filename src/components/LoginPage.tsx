@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Database, Mail, Lock, Eye, EyeOff, Check, Settings, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import Logo from './Logo';
 
 interface LoginPageProps {
   isSignup?: boolean;
@@ -51,9 +52,7 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl mb-4">
-              <Database className="w-8 h-8 text-white" />
-            </div>
+            <Logo size="xl" showText={true} className="justify-center mb-4" />
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Choose Dashboard</h1>
             <p className="text-gray-600">
               Select which dashboard you'd like to access
@@ -115,9 +114,7 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
       <div className="max-w-md w-full">
         {/* Logo and Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl mb-4">
-            <Database className="w-8 h-8 text-white" />
-          </div>
+          <Logo size="xl" showText={true} className="justify-center mb-4" />
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to EnrichX</h1>
           <p className="text-gray-600">
             {isSignUp ? 'Create your account to get started' : 'Sign in to access your dashboard'}

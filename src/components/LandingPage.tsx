@@ -1,6 +1,7 @@
 import React from 'react';
-import { Database, Users, Target, BarChart3, Star, Check, DollarSign, Briefcase, Award } from 'lucide-react'; // Added icons for pricing
+import { Database, Users, Target, BarChart3, Star, Check, DollarSign, Briefcase, Award } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import Logo from './Logo';
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -15,29 +16,24 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Header with logo and auth buttons */}
-      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10"> {/* Added sticky and z-10 */}
+      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-              <Database className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-xl font-bold text-gray-900">EnrichX</h1>
-          </div>
-          <nav className="hidden md:flex space-x-6"> {/* Navigation links */}
+          <Logo size="md" showText={true} />
+          <nav className="hidden md:flex space-x-6">
             <button
-              onClick={() => scrollToSection('hero-section')} // Link to Hero
+              onClick={() => scrollToSection('hero-section')}
               className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
             >
               Home
             </button>
             <button
-              onClick={() => scrollToSection('features-section')} // Link to Features
+              onClick={() => scrollToSection('features-section')}
               className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
             >
               Features
             </button>
             <button
-              onClick={() => scrollToSection('pricing-section')} // Link to Pricing
+              onClick={() => scrollToSection('pricing-section')}
               className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
             >
               Pricing
@@ -61,7 +57,7 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section id="hero-section" className="max-w-7xl mx-auto px-6 py-16 md:py-24"> {/* Added ID */}
+      <section id="hero-section" className="max-w-7xl mx-auto px-6 py-16 md:py-24">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight">
@@ -115,7 +111,7 @@ export default function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section id="features-section" className="max-w-7xl mx-auto px-6 py-16"> {/* Added ID */}
+      <section id="features-section" className="max-w-7xl mx-auto px-6 py-16">
         <div className="text-center mb-12">
           <h3 className="text-2xl font-bold text-gray-900">Powerful Features for Modern Sales Teams</h3>
           <p className="text-gray-600 mt-2">Everything you need to supercharge your B2B outreach and prospecting</p>
@@ -146,7 +142,7 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing-section" className="max-w-7xl mx-auto px-6 py-16 bg-white rounded-2xl shadow-xl"> {/* Added ID and styling */}
+      <section id="pricing-section" className="max-w-7xl mx-auto px-6 py-16 bg-white rounded-2xl shadow-xl">
         <div className="text-center mb-12">
           <h3 className="text-3xl font-bold text-gray-900">Simple, Transparent Pricing</h3>
           <p className="text-gray-600 mt-2 text-lg">Choose the plan that fits your business needs</p>
@@ -163,7 +159,7 @@ export default function LandingPage() {
               $0<span className="text-lg font-medium text-gray-600">/month</span>
             </div>
             <p className="text-sm text-gray-500 mb-6">Includes basic features.</p>
-            <ul className="space-y-3 text-gray-600 flex-grow"> {/* flex-grow to push button down */}
+            <ul className="space-y-3 text-gray-600 flex-grow">
               <li className="flex items-center">
                 <Check className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" />
                 <span>Limited contact searches</span>
@@ -186,8 +182,8 @@ export default function LandingPage() {
           </div>
 
           {/* Pro Plan */}
-          <div className="flex flex-col p-8 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border border-blue-300 shadow-lg relative overflow-hidden"> {/* Added gradient and border */}
-             <div className="absolute top-0 right-0 bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-bl-lg">Popular</div> {/* Popular tag */}
+          <div className="flex flex-col p-8 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border-2 border-blue-300 shadow-lg relative overflow-hidden">
+             <div className="absolute top-0 right-0 bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-bl-lg">Popular</div>
             <div className="flex items-center space-x-3 mb-4">
               <Briefcase className="w-8 h-8 text-blue-700" />
               <h4 className="text-2xl font-bold text-gray-900">Pro</h4>
@@ -197,7 +193,7 @@ export default function LandingPage() {
               $99<span className="text-lg font-medium text-gray-600">/month</span>
             </div>
             <p className="text-sm text-gray-500 mb-6">Billed annually. Monthly options available.</p>
-             <ul className="space-y-3 text-gray-700 flex-grow"> {/* flex-grow to push button down */}
+             <ul className="space-y-3 text-gray-700 flex-grow">
               <li className="flex items-center">
                 <Check className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" />
                 <span>Unlimited contact searches</span>
@@ -216,7 +212,7 @@ export default function LandingPage() {
               </li>
             </ul>
             <button
-              onClick={() => navigate('/signup')} // Or navigate to a specific Pro signup flow
+              onClick={() => navigate('/signup')}
               className="mt-8 w-full px-6 py-3 text-sm font-medium text-blue-700 bg-white border border-blue-700 rounded-lg hover:bg-blue-100 transition-colors shadow-md hover:shadow-lg text-center"
             >
               Start Pro Trial
@@ -234,7 +230,7 @@ export default function LandingPage() {
               Custom
             </div>
             <p className="text-sm text-gray-500 mb-6">Tailored to your requirements.</p>
-             <ul className="space-y-3 text-gray-600 flex-grow"> {/* flex-grow to push button down */}
+             <ul className="space-y-3 text-gray-600 flex-grow">
               <li className="flex items-center">
                 <Check className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" />
                 <span>Everything in Pro</span>
@@ -253,7 +249,7 @@ export default function LandingPage() {
               </li>
             </ul>
             <button
-              onClick={() => navigate('/contact')} // Assuming a contact page exists or will be created
+              onClick={() => navigate('/contact')}
               className="mt-8 w-full px-6 py-3 text-sm font-medium text-purple-700 bg-white border border-purple-700 rounded-lg hover:bg-purple-100 transition-colors shadow-md hover:shadow-lg text-center"
             >
               Contact Sales
@@ -262,17 +258,11 @@ export default function LandingPage() {
         </div>
       </section>
 
-
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-16 py-8">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center">
-          <div className="flex items-center space-x-2 mb-4 md:mb-0">
-            <div className="w-6 h-6 bg-gradient-to-br from-blue-600 to-purple-600 rounded-md flex items-center justify-center">
-              <Database className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-semibold text-gray-900">EnrichX</span>
-          </div>
-          <div className="text-sm text-gray-500">
+          <Logo size="sm" showText={true} />
+          <div className="text-sm text-gray-500 mt-4 md:mt-0">
             © 2025 EnrichX. All rights reserved.
           </div>
         </div>
