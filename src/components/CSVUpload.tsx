@@ -47,6 +47,8 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
     'linkedin_url',
     'job_title',
     'company_name',
+    'company_website',
+    'department',
     'start_date',
     'email',
     'email_score',
@@ -133,6 +135,11 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
             'site': 'website',
             'url': 'website',
             'homepage': 'website',
+            'company_url': 'company_website',
+            'company_site': 'company_website',
+            'dept': 'department',
+            'division': 'department',
+            'team': 'department',
             'start': 'start_date',
             'date': 'start_date',
             'joined': 'start_date'
@@ -205,6 +212,56 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
       console.warn(`Error parsing date "${dateString}":`, error);
       return null;
     }
+  };
+
+  // Function to normalize website URL for comparison
+  const normalizeWebsite = (website: string): string => {
+    if (!website) return '';
+    
+    // Remove protocol and www
+    let normalized = website.toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .replace(/\/$/, ''); // Remove trailing slash
+    
+    return normalized;
+  };
+
+  // Function to find company by website domain
+  const findCompanyByWebsite = async (website: string, companyName: string) => {
+    if (!website) return null;
+    
+    const normalizedWebsite = normalizeWebsite(website);
+    
+    // First try to find by exact website match
+    const { data: exactMatch } = await supabase
+      .from('companies')
+      .select('company_id, website')
+      .not('website', 'is', null)
+      .limit(100); // Get all companies with websites
+    
+    if (exactMatch) {
+      for (const company of exactMatch) {
+        if (company.website && normalizeWebsite(company.website) === normalizedWebsite) {
+          console.log(`Found company by website match: ${company.company_id}`);
+          return company.company_id;
+        }
+      }
+    }
+    
+    // If no website match, try by company name
+    const { data: nameMatch } = await supabase
+      .from('companies')
+      .select('company_id')
+      .eq('company_name', companyName)
+      .single();
+    
+    if (nameMatch) {
+      console.log(`Found company by name match: ${nameMatch.company_id}`);
+      return nameMatch.company_id;
+    }
+    
+    return null;
   };
 
   const handleUpload = async () => {
@@ -310,37 +367,34 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
           } else {
             // For contacts, we need to find or create the company first
             const companyName = getFieldValue(row, 'company_name');
+            const companyWebsite = getFieldValue(row, 'company_website');
             let companyId: string | null = null;
 
-            console.log('Processing contact with company name:', companyName);
+            console.log('Processing contact with company name:', companyName, 'website:', companyWebsite);
 
             if (companyName && companyName.trim() !== '' && companyName !== '-') {
-              // Try to find existing company
-              const { data: existingCompany } = await supabase
-                .from('companies')
-                .select('company_id')
-                .eq('company_name', companyName)
-                .single();
+              // Try to find existing company by website first, then by name
+              companyId = await findCompanyByWebsite(companyWebsite, companyName);
 
-              if (existingCompany) {
-                companyId = existingCompany.company_id;
-                console.log('Found existing company:', companyId);
-              } else {
+              if (!companyId) {
                 // Create new company
                 console.log('Creating new company:', companyName);
+                const newCompanyData: CompanyInsert = {
+                  company_name: companyName,
+                  company_type: 'Private',
+                  industry: 'Technology',
+                  website: companyWebsite || null,
+                  hq_location: getFieldValue(row, 'location_city') || '',
+                  location_city: getFieldValue(row, 'location_city') || '',
+                  location_state: getFieldValue(row, 'location_state') || '',
+                  location_region: getFieldValue(row, 'location_region') || 'North America',
+                  size_range: '1-50',
+                  visible_to_tiers: ['free', 'pro', 'enterprise']
+                };
+
                 const { data: newCompany, error: companyError } = await supabase
                   .from('companies')
-                  .insert({
-                    company_name: companyName,
-                    company_type: 'Private',
-                    industry: 'Technology',
-                    hq_location: getFieldValue(row, 'location_city') || '',
-                    location_city: getFieldValue(row, 'location_city') || '',
-                    location_state: getFieldValue(row, 'location_state') || '',
-                    location_region: getFieldValue(row, 'location_region') || 'North America',
-                    size_range: '1-50',
-                    visible_to_tiers: ['free', 'pro', 'enterprise']
-                  })
+                  .insert(newCompanyData)
                   .select('company_id')
                   .single();
 
@@ -365,6 +419,8 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
                 linkedin_url: getFieldValue(row, 'linkedin_url') || null,
                 job_title: getFieldValue(row, 'job_title') || '',
                 company_id: companyId,
+                company_website: companyWebsite || null,
+                department: getFieldValue(row, 'department') || null,
                 start_date: parsedStartDate,
                 email: getFieldValue(row, 'email') || null,
                 email_score: parseNumber(getFieldValue(row, 'email_score')),
@@ -473,7 +529,7 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
     const headers = currentFields.join(',');
     const sampleRow = uploadType === 'companies' 
       ? 'TechCorp Inc.,Private,Software,https://techcorp.com,https://linkedin.com/company/techcorp,San Francisco CA,San Francisco,CA,North America,201-500,350,$50M-$100M,+1-555-123-4567,SaaS;B2B,Software;Technology,React;Node.js'
-      : 'John Doe,https://linkedin.com/in/johndoe,Software Engineer,TechCorp Inc.,01 2024,john.doe@techcorp.com,95,+1-555-123-4567,San Francisco,CA,North America';
+      : 'John Doe,https://linkedin.com/in/johndoe,Software Engineer,TechCorp Inc.,https://techcorp.com,Engineering,01 2024,john.doe@techcorp.com,95,+1-555-123-4567,San Francisco,CA,North America';
     
     const csvContent = `${headers}\n${sampleRow}`;
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -532,19 +588,41 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
         </div>
       </div>
 
-      {/* Date Format Info */}
+      {/* Enhanced Info Sections */}
       {uploadType === 'contacts' && (
-        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h4 className="text-sm font-medium text-blue-900 mb-2">📅 Date Format Guidelines</h4>
-          <div className="text-sm text-blue-800 space-y-1">
-            <p><strong>Supported start_date formats:</strong></p>
-            <ul className="list-disc list-inside ml-4 space-y-1">
-              <li><code>MM YYYY</code> - e.g., "01 2024", "12 2023" (shows as MM YYYY)</li>
-              <li><code>YYYY</code> - e.g., "2024", "2023" (shows as YYYY only)</li>
-              <li><code>MM/YYYY</code> - e.g., "01/2024", \"12/2023"</li>
-              <li><code>MM-YYYY</code> - e.g., "01-2024", "12-2023"</li>
-              <li>Standard dates - e.g., "2024-01-15", "01/15/2024"</li>
-            </ul>
+        <div className="mb-6 space-y-4">
+          {/* Date Format Info */}
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h4 className="text-sm font-medium text-blue-900 mb-2">📅 Date Format Guidelines</h4>
+            <div className="text-sm text-blue-800 space-y-1">
+              <p><strong>Supported start_date formats:</strong></p>
+              <ul className="list-disc list-inside ml-4 space-y-1">
+                <li><code>MM YYYY</code> - e.g., "01 2024", "12 2023" (shows as MM YYYY)</li>
+                <li><code>YYYY</code> - e.g., "2024", "2023" (shows as YYYY only)</li>
+                <li><code>MM/YYYY</code> - e.g., "01/2024", "12/2023"</li>
+                <li><code>MM-YYYY</code> - e.g., "01-2024", "12-2023"</li>
+                <li>Standard dates - e.g., "2024-01-15", "01/15/2024"</li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Company Linking Info */}
+          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+            <h4 className="text-sm font-medium text-green-900 mb-2">🏢 Smart Company Linking</h4>
+            <div className="text-sm text-green-800 space-y-1">
+              <p><strong>New fields added:</strong></p>
+              <ul className="list-disc list-inside ml-4 space-y-1">
+                <li><code>company_website</code> - Company website URL for smart linking</li>
+                <li><code>department</code> - Contact's department/division</li>
+              </ul>
+              <p className="mt-2"><strong>How it works:</strong></p>
+              <ul className="list-disc list-inside ml-4 space-y-1">
+                <li>System first tries to match companies by website domain</li>
+                <li>If no website match, falls back to company name matching</li>
+                <li>Only creates new company if no match is found</li>
+                <li>Prevents duplicate companies with same domain</li>
+              </ul>
+            </div>
           </div>
         </div>
       )}
@@ -644,8 +722,8 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {currentFields.map((field) => (
                 <div key={field} className="flex items-center space-x-2">
-                  <label className="text-xs font-medium text-gray-700 w-24 capitalize">
-                    {field.replace('_', ' ')}
+                  <label className="text-xs font-medium text-gray-700 w-28 capitalize">
+                    {field.replace(/_/g, ' ')}
                     {requiredFields.includes(field) && <span className="text-red-500">*</span>}:
                   </label>
                   <select

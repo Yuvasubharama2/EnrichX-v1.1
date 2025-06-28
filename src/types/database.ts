@@ -93,6 +93,8 @@ export interface Database {
           location_city: string
           location_state: string
           location_region: string
+          company_website: string | null
+          department: string | null
           visible_to_tiers: SubscriptionTier[]
           created_at: string
           updated_at: string
@@ -110,6 +112,8 @@ export interface Database {
           location_city: string
           location_state: string
           location_region: string
+          company_website?: string | null
+          department?: string | null
           visible_to_tiers?: SubscriptionTier[]
           created_at?: string
           updated_at?: string
@@ -127,6 +131,8 @@ export interface Database {
           location_city?: string
           location_state?: string
           location_region?: string
+          company_website?: string | null
+          department?: string | null
           visible_to_tiers?: SubscriptionTier[]
           created_at?: string
           updated_at?: string
