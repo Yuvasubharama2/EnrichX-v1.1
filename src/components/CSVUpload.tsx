@@ -132,7 +132,10 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
             'linkedin_profile': 'linkedin_url',
             'site': 'website',
             'url': 'website',
-            'homepage': 'website'
+            'homepage': 'website',
+            'start': 'start_date',
+            'date': 'start_date',
+            'joined': 'start_date'
           };
           
           matchedField = specialMappings[normalizedHeader];
@@ -147,6 +150,61 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
       console.log('Auto-mapped fields:', autoMapping);
     };
     reader.readAsText(file);
+  };
+
+  // Enhanced date parsing function
+  const parseDate = (dateString: string): string | null => {
+    if (!dateString || dateString.trim() === '' || dateString === '-') {
+      return null;
+    }
+
+    const cleanDate = dateString.trim();
+    
+    try {
+      // Handle MM YYYY format (e.g., "01 2024", "12 2023")
+      const mmYyyyMatch = cleanDate.match(/^(\d{1,2})\s+(\d{4})$/);
+      if (mmYyyyMatch) {
+        const month = mmYyyyMatch[1].padStart(2, '0');
+        const year = mmYyyyMatch[2];
+        return `${year}-${month}-01`; // First day of the month
+      }
+
+      // Handle YYYY format (e.g., "2024", "2023")
+      const yyyyMatch = cleanDate.match(/^(\d{4})$/);
+      if (yyyyMatch) {
+        const year = yyyyMatch[1];
+        return `${year}-01-01`; // First day of the year
+      }
+
+      // Handle MM/YYYY format (e.g., "01/2024", "12/2023")
+      const mmSlashYyyyMatch = cleanDate.match(/^(\d{1,2})\/(\d{4})$/);
+      if (mmSlashYyyyMatch) {
+        const month = mmSlashYyyyMatch[1].padStart(2, '0');
+        const year = mmSlashYyyyMatch[2];
+        return `${year}-${month}-01`;
+      }
+
+      // Handle MM-YYYY format (e.g., "01-2024", "12-2023")
+      const mmDashYyyyMatch = cleanDate.match(/^(\d{1,2})-(\d{4})$/);
+      if (mmDashYyyyMatch) {
+        const month = mmDashYyyyMatch[1].padStart(2, '0');
+        const year = mmDashYyyyMatch[2];
+        return `${year}-${month}-01`;
+      }
+
+      // Handle standard date formats
+      const date = new Date(cleanDate);
+      if (!isNaN(date.getTime())) {
+        return date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      }
+
+      // If all parsing fails, return null
+      console.warn(`Could not parse date: "${dateString}"`);
+      return null;
+    } catch (error) {
+      console.warn(`Error parsing date "${dateString}":`, error);
+      return null;
+    }
   };
 
   const handleUpload = async () => {
@@ -296,12 +354,18 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
             }
 
             if (companyId) {
+              // Parse the start_date with enhanced date parsing
+              const startDateValue = getFieldValue(row, 'start_date');
+              const parsedStartDate = parseDate(startDateValue);
+              
+              console.log(`Parsing start_date: "${startDateValue}" -> "${parsedStartDate}"`);
+
               const contactData: ContactInsert = {
                 name: getFieldValue(row, 'name') || '',
                 linkedin_url: getFieldValue(row, 'linkedin_url') || null,
                 job_title: getFieldValue(row, 'job_title') || '',
                 company_id: companyId,
-                start_date: getFieldValue(row, 'start_date') || null,
+                start_date: parsedStartDate,
                 email: getFieldValue(row, 'email') || null,
                 email_score: parseNumber(getFieldValue(row, 'email_score')),
                 phone_number: getFieldValue(row, 'phone_number') || null,
@@ -407,7 +471,12 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
 
   const downloadTemplate = () => {
     const headers = currentFields.join(',');
-    const blob = new Blob([headers], { type: 'text/csv' });
+    const sampleRow = uploadType === 'companies' 
+      ? 'TechCorp Inc.,Private,Software,https://techcorp.com,https://linkedin.com/company/techcorp,San Francisco CA,San Francisco,CA,North America,201-500,350,$50M-$100M,+1-555-123-4567,SaaS;B2B,Software;Technology,React;Node.js'
+      : 'John Doe,https://linkedin.com/in/johndoe,Software Engineer,TechCorp Inc.,01 2024,john.doe@techcorp.com,95,+1-555-123-4567,San Francisco,CA,North America';
+    
+    const csvContent = `${headers}\n${sampleRow}`;
+    const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -462,6 +531,23 @@ export default function CSVUpload({ uploadType, onUploadTypeChange, onNavigateTo
           </button>
         </div>
       </div>
+
+      {/* Date Format Info */}
+      {uploadType === 'contacts' && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h4 className="text-sm font-medium text-blue-900 mb-2">📅 Date Format Guidelines</h4>
+          <div className="text-sm text-blue-800 space-y-1">
+            <p><strong>Supported start_date formats:</strong></p>
+            <ul className="list-disc list-inside ml-4 space-y-1">
+              <li><code>MM YYYY</code> - e.g., "01 2024", "12 2023" (shows as MM YYYY)</li>
+              <li><code>YYYY</code> - e.g., "2024", "2023" (shows as YYYY only)</li>
+              <li><code>MM/YYYY</code> - e.g., "01/2024", "12/2023"</li>
+              <li><code>MM-YYYY</code> - e.g., "01-2024", "12-2023"</li>
+              <li>Standard dates - e.g., "2024-01-15", "01/15/2024"</li>
+            </ul>
+          </div>
+        </div>
+      )}
 
       {/* Upload Steps */}
       <div className="mb-8">
