@@ -86,33 +86,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password
       });
 
-      if (signInError && signInError.message.includes('Invalid login credentials')) {
-        // If sign in fails, try to sign up
-        const role = email === 'admin@enrichx.com' ? 'admin' : 'subscriber';
-        const tier = subscriptionTier || (role === 'admin' ? 'enterprise' : 'free');
-        
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              name: email === 'admin@enrichx.com' ? 'Admin User' : 'User',
-              role,
-              subscription_tier: tier,
-              credits_remaining: getDefaultCredits(tier),
-              subscription_status: 'active'
+      if (signInError) {
+        // Only attempt sign up if subscriptionTier is explicitly provided
+        if (subscriptionTier && signInError.message.includes('Invalid login credentials')) {
+          // If sign in fails and subscriptionTier is provided, try to sign up
+          const role = email === 'admin@enrichx.com' ? 'admin' : 'subscriber';
+          const tier = subscriptionTier || (role === 'admin' ? 'enterprise' : 'free');
+          
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                name: email === 'admin@enrichx.com' ? 'Admin User' : 'User',
+                role,
+                subscription_tier: tier,
+                credits_remaining: getDefaultCredits(tier),
+                subscription_status: 'active'
+              }
             }
-          }
-        });
+          });
 
-        if (signUpError) throw signUpError;
-        
-        if (signUpData.user) {
-          const userData = createUserFromSupabaseUser(signUpData.user);
-          setUser(userData);
+          if (signUpError) throw signUpError;
+          
+          if (signUpData.user) {
+            const userData = createUserFromSupabaseUser(signUpData.user);
+            setUser(userData);
+          }
+        } else {
+          // If no subscriptionTier provided or other error, throw the original error
+          throw signInError;
         }
-      } else if (signInError) {
-        throw signInError;
       } else if (signInData.user) {
         // Update user metadata if subscription tier is provided
         if (subscriptionTier) {
