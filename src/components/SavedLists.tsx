@@ -27,7 +27,12 @@ export default function SavedLists() {
     // Load company lists from localStorage
     const savedCompanyLists = localStorage.getItem(`company_lists_${user?.id}`);
     if (savedCompanyLists) {
-      setCompanyLists(JSON.parse(savedCompanyLists));
+      const parsedLists = JSON.parse(savedCompanyLists).map((list: any) => ({
+        ...list,
+        created_at: new Date(list.created_at),
+        updated_at: new Date(list.updated_at)
+      }));
+      setCompanyLists(parsedLists);
     } else {
       // Create some sample company lists
       const sampleCompanyLists = [
@@ -66,7 +71,12 @@ export default function SavedLists() {
     // Load contact lists from localStorage
     const savedContactLists = localStorage.getItem(`contact_lists_${user?.id}`);
     if (savedContactLists) {
-      setContactLists(JSON.parse(savedContactLists));
+      const parsedLists = JSON.parse(savedContactLists).map((list: any) => ({
+        ...list,
+        created_at: new Date(list.created_at),
+        updated_at: new Date(list.updated_at)
+      }));
+      setContactLists(parsedLists);
     } else {
       // Create some sample contact lists
       const sampleContactLists = [
