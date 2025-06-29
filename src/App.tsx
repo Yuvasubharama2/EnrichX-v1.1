@@ -11,6 +11,7 @@ import AdminContactsPage from './components/AdminContactsPage';
 import UserDashboard from './components/UserDashboard';
 import UserCompaniesPage from './components/UserCompaniesPage';
 import SavedLists from './components/SavedLists';
+import FavoritesPage from './components/FavoritesPage';
 import BillingPage from './components/BillingPage';
 import LandingPage from './components/LandingPage';
 
@@ -74,14 +75,7 @@ function UserApp() {
       case 'lists':
         return <SavedLists />;
       case 'favorites':
-        return (
-          <div className="max-w-4xl mx-auto p-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Favorites</h3>
-              <p className="text-gray-600">Your favorite contacts will appear here...</p>
-            </div>
-          </div>
-        );
+        return <FavoritesPage />;
       case 'exports':
         return (
           <div className="max-w-4xl mx-auto p-6">
