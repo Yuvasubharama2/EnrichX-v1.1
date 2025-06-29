@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, Star, Building2, Mail, Phone, MapPin, ExternalLink, Globe, ChevronDown, ChevronUp, X, Heart, BookmarkPlus, Check } from 'lucide-react';
+import { Search, Filter, Download, Plus, Star, Building2, Mail, Phone, MapPin, ExternalLink, Globe, ChevronDown, ChevronUp, X, Heart, BookmarkPlus, Check, Calendar, Linkedin } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 import { useAuth } from '../contexts/AuthContext';
@@ -63,17 +63,17 @@ export default function UserDashboard() {
   });
 
   const [visibleFields, setVisibleFields] = useState<VisibleFields>({
-    linkedin_url: false,
+    linkedin_url: true,
     job_title: true,
     company_name: true,
     company_website: false,
-    department: false,
-    start_date: false,
+    department: true,
+    start_date: true,
     email: true,
     email_score: true,
     phone_number: true,
     location_city: true,
-    location_state: false,
+    location_state: true,
     location_region: false,
     created_at: false
   });
@@ -289,6 +289,15 @@ export default function UserDashboard() {
     return count;
   };
 
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short'
+    });
+  };
+
   const handleSaveToList = () => {
     if (selectedContacts.length === 0) return;
     setShowSaveListModal(true);
@@ -318,7 +327,7 @@ export default function UserDashboard() {
     const selectedData = contacts.filter(c => selectedContacts.includes(c.contact_id));
     const csvContent = [
       // Header
-      ['Name', 'Job Title', 'Company', 'Email', 'Phone', 'Location'].join(','),
+      ['Name', 'Job Title', 'Company', 'Email', 'Phone', 'City', 'State', 'Start Date'].join(','),
       // Data rows
       ...selectedData.map(contact => [
         contact.name,
@@ -326,7 +335,9 @@ export default function UserDashboard() {
         contact.company?.company_name || '',
         contact.email || '',
         contact.phone_number || '',
-        `${contact.location_city}, ${contact.location_state}`
+        contact.location_city,
+        contact.location_state,
+        formatDate(contact.start_date)
       ].map(field => `"${field}"`).join(','))
     ].join('\n');
 
@@ -628,6 +639,16 @@ export default function UserDashboard() {
                     Company
                   </th>
                 )}
+                {visibleFields.department && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
+                    Department
+                  </th>
+                )}
+                {visibleFields.start_date && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+                    Start Date
+                  </th>
+                )}
                 {visibleFields.email && (
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">
                     Email
@@ -639,8 +660,18 @@ export default function UserDashboard() {
                   </th>
                 )}
                 {visibleFields.location_city && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
-                    Location
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+                    City
+                  </th>
+                )}
+                {visibleFields.location_state && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
+                    State
+                  </th>
+                )}
+                {visibleFields.location_region && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+                    Region
                   </th>
                 )}
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
@@ -679,7 +710,7 @@ export default function UserDashboard() {
                               className="p-1 text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0"
                               title="View LinkedIn profile"
                             >
-                              <ExternalLink className="w-4 h-4" />
+                              <Linkedin className="w-4 h-4" />
                             </a>
                           )}
                         </div>
@@ -689,9 +720,6 @@ export default function UserDashboard() {
                   {visibleFields.job_title && (
                     <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{contact.job_title}</div>
-                      {visibleFields.department && contact.department && (
-                        <div className="text-xs text-gray-500">{contact.department}</div>
-                      )}
                     </td>
                   )}
                   {visibleFields.company_name && (
@@ -712,6 +740,19 @@ export default function UserDashboard() {
                             <Globe className="w-3 h-3" />
                           </a>
                         )}
+                      </div>
+                    </td>
+                  )}
+                  {visibleFields.department && (
+                    <td className="px-4 py-4">
+                      <div className="text-sm text-gray-900">{contact.department || '-'}</div>
+                    </td>
+                  )}
+                  {visibleFields.start_date && (
+                    <td className="px-4 py-4">
+                      <div className="flex items-center text-sm text-gray-900">
+                        <Calendar className="w-4 h-4 mr-1 text-gray-400" />
+                        {formatDate(contact.start_date)}
                       </div>
                     </td>
                   )}
@@ -748,10 +789,17 @@ export default function UserDashboard() {
                   )}
                   {visibleFields.location_city && (
                     <td className="px-4 py-4">
-                      <div className="flex items-center text-sm text-gray-900">
-                        <MapPin className="w-4 h-4 mr-1 text-gray-400" />
-                        {contact.location_city}, {contact.location_state}
-                      </div>
+                      <div className="text-sm text-gray-900">{contact.location_city}</div>
+                    </td>
+                  )}
+                  {visibleFields.location_state && (
+                    <td className="px-4 py-4">
+                      <div className="text-sm text-gray-900">{contact.location_state}</div>
+                    </td>
+                  )}
+                  {visibleFields.location_region && (
+                    <td className="px-4 py-4">
+                      <div className="text-sm text-gray-900">{contact.location_region}</div>
                     </td>
                   )}
                   <td className="px-4 py-4">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Search, Filter, Eye, EyeOff, CheckCircle, XCircle, RefreshCw, Globe, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Building2, Search, Filter, Eye, EyeOff, CheckCircle, XCircle, RefreshCw, Globe, ChevronDown, ChevronUp, X, Linkedin } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 
@@ -59,10 +59,10 @@ export default function AdminCompaniesPage() {
     company_type: true,
     industry: true,
     website: true,
-    linkedin_url: false,
+    linkedin_url: true,
     hq_location: false,
     location_city: true,
-    location_state: false,
+    location_state: true,
     location_region: false,
     size_range: true,
     revenue: false,
@@ -147,7 +147,7 @@ export default function AdminCompaniesPage() {
     setUpdating(companyId);
     
     try {
-      const company = companies.find(c => c.company_id === companyId);
+      const company = companies.fin(c => c.company_id === companyId);
       if (!company) return;
 
       let updatedTiers = [...(company.visible_to_tiers || [])];
@@ -504,6 +504,11 @@ export default function AdminCompaniesPage() {
                     State
                   </th>
                 )}
+                {visibleFields.location_region && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+                    Region
+                  </th>
+                )}
                 {visibleFields.size_range && (
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                     Size
@@ -547,7 +552,7 @@ export default function AdminCompaniesPage() {
                           <div className="text-sm font-medium text-gray-900 truncate">
                             {company.company_name}
                           </div>
-                          {company.website && (
+                          {visibleFields.website && company.website && (
                             <a
                               href={formatWebsiteUrl(company.website)}
                               target="_blank"
@@ -558,19 +563,18 @@ export default function AdminCompaniesPage() {
                               <Globe className="w-4 h-4" />
                             </a>
                           )}
-                        </div>
-                        {visibleFields.linkedin_url && company.linkedin_url && (
-                          <div className="text-xs text-blue-600 mt-1 truncate">
+                          {visibleFields.linkedin_url && company.linkedin_url && (
                             <a
                               href={company.linkedin_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="hover:underline"
+                              className="p-1 text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0"
+                              title="View LinkedIn profile"
                             >
-                              LinkedIn Profile
+                              <Linkedin className="w-4 h-4" />
                             </a>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -597,6 +601,11 @@ export default function AdminCompaniesPage() {
                   {visibleFields.location_state && (
                     <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{company.location_state}</div>
+                    </td>
+                  )}
+                  {visibleFields.location_region && (
+                    <td className="px-4 py-4">
+                      <div className="text-sm text-gray-900">{company.location_region}</div>
                     </td>
                   )}
                   {visibleFields.size_range && (

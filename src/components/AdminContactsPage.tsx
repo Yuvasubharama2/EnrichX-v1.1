@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Filter, Building2, Mail, Phone, CheckCircle, RefreshCw, Globe, ChevronDown, ChevronUp, X, ExternalLink, Calendar } from 'lucide-react';
+import { Users, Search, Filter, Building2, Mail, Phone, CheckCircle, RefreshCw, Globe, ChevronDown, ChevronUp, X, ExternalLink, Calendar, Linkedin } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 
@@ -60,17 +60,17 @@ export default function AdminContactsPage() {
   });
 
   const [visibleFields, setVisibleFields] = useState<VisibleFields>({
-    linkedin_url: false,
+    linkedin_url: true,
     job_title: true,
     company_name: true,
     company_website: false,
-    department: false,
-    start_date: false,
+    department: true,
+    start_date: true,
     email: true,
     email_score: true,
     phone_number: true,
     location_city: true,
-    location_state: false,
+    location_state: true,
     location_region: false,
     created_at: false,
     updated_at: false
@@ -646,6 +646,11 @@ export default function AdminContactsPage() {
                     State
                   </th>
                 )}
+                {visibleFields.location_region && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+                    Region
+                  </th>
+                )}
                 {visibleFields.created_at && (
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                     Created
@@ -679,7 +684,7 @@ export default function AdminContactsPage() {
                               className="p-1 text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0"
                               title="View LinkedIn profile"
                             >
-                              <ExternalLink className="w-3 h-3" />
+                              <Linkedin className="w-4 h-4" />
                             </a>
                           )}
                         </div>
@@ -764,6 +769,11 @@ export default function AdminContactsPage() {
                   {visibleFields.location_state && (
                     <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{contact.location_state}</div>
+                    </td>
+                  )}
+                  {visibleFields.location_region && (
+                    <td className="px-4 py-4">
+                      <div className="text-sm text-gray-900">{contact.location_region}</div>
                     </td>
                   )}
                   {visibleFields.created_at && (

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, Star, Building2, ExternalLink, MapPin, Users, Globe, ChevronDown, ChevronUp, X, Heart, BookmarkPlus, Check } from 'lucide-react';
+import { Search, Filter, Download, Plus, Star, Building2, ExternalLink, MapPin, Users, Globe, ChevronDown, ChevronUp, X, Heart, BookmarkPlus, Check, Linkedin } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 import { useAuth } from '../contexts/AuthContext';
@@ -62,10 +62,10 @@ export default function UserCompaniesPage() {
     company_type: true,
     industry: true,
     website: true,
-    linkedin_url: false,
+    linkedin_url: true,
     hq_location: false,
     location_city: true,
-    location_state: false,
+    location_state: true,
     location_region: false,
     size_range: true,
     revenue: false,
@@ -255,14 +255,15 @@ export default function UserCompaniesPage() {
     const selectedData = companies.filter(c => selectedCompanies.includes(c.company_id));
     const csvContent = [
       // Header
-      ['Company Name', 'Type', 'Industry', 'Website', 'Location', 'Size', 'Revenue'].join(','),
+      ['Company Name', 'Type', 'Industry', 'Website', 'City', 'State', 'Size', 'Revenue'].join(','),
       // Data rows
       ...selectedData.map(company => [
         company.company_name,
         company.company_type,
         company.industry,
         company.website || '',
-        company.hq_location,
+        company.location_city,
+        company.location_state,
         company.size_range,
         company.revenue || ''
       ].map(field => `"${field}"`).join(','))
@@ -365,6 +366,11 @@ export default function UserCompaniesPage() {
                     <span className="text-sm text-gray-700">{formatFieldName(field)}</span>
                   </label>
                 ))}
+              </div>
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-xs text-blue-800">
+                  <strong>Note:</strong> Headcount is automatically displayed below the Size field when Size is visible.
+                </p>
               </div>
             </div>
           )}
@@ -585,6 +591,16 @@ export default function UserCompaniesPage() {
                     City
                   </th>
                 )}
+                {visibleFields.location_state && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
+                    State
+                  </th>
+                )}
+                {visibleFields.location_region && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
+                    Region
+                  </th>
+                )}
                 {visibleFields.size_range && (
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                     Size
@@ -645,7 +661,7 @@ export default function UserCompaniesPage() {
                               className="p-1 text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0"
                               title="View LinkedIn profile"
                             >
-                              <ExternalLink className="w-4 h-4" />
+                              <Linkedin className="w-4 h-4" />
                             </a>
                           )}
                         </div>
@@ -691,7 +707,17 @@ export default function UserCompaniesPage() {
                   )}
                   {visibleFields.location_city && (
                     <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">{company.location_city}, {company.location_state}</div>
+                      <div className="text-sm text-gray-900">{company.location_city}</div>
+                    </td>
+                  )}
+                  {visibleFields.location_state && (
+                    <td className="px-4 py-4">
+                      <div className="text-sm text-gray-900">{company.location_state}</div>
+                    </td>
+                  )}
+                  {visibleFields.location_region && (
+                    <td className="px-4 py-4">
+                      <div className="text-sm text-gray-900">{company.location_region}</div>
                     </td>
                   )}
                   {visibleFields.size_range && (
