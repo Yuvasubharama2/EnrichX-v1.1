@@ -25,8 +25,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
 
-  // Inactivity timeout (10 minutes)
-  const INACTIVITY_TIMEOUT = 10 * 60 * 1000; // 10 minutes in milliseconds
+  // Inactivity timeout (30 minutes for better UX)
+  const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
 
   const resetInactivityTimer = () => {
     lastActivityRef.current = Date.now();
@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (user) {
       inactivityTimerRef.current = setTimeout(() => {
-        console.log('User inactive for 10 minutes, logging out...');
+        console.log('User inactive for 30 minutes, logging out...');
         logout();
       }, INACTIVITY_TIMEOUT);
     }
@@ -64,18 +64,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cleanupActivityListeners: (() => void) | null = null;
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        const userData = createUserFromSupabaseUser(session.user);
-        setUser(userData);
+    // Get initial session with better error handling
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
         
-        // Setup activity monitoring for logged-in users
-        cleanupActivityListeners = setupActivityListeners();
-        resetInactivityTimer();
+        if (error) {
+          console.error('Error getting session:', error);
+          setIsLoading(false);
+          return;
+        }
+
+        if (session?.user) {
+          const userData = createUserFromSupabaseUser(session.user);
+          setUser(userData);
+          
+          // Setup activity monitoring for logged-in users
+          cleanupActivityListeners = setupActivityListeners();
+          resetInactivityTimer();
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
-    });
+    };
+
+    initializeAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
