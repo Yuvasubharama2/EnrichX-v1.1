@@ -62,33 +62,32 @@ export default function AdminUsersPage() {
     try {
       setLoading(true);
       
-      // Fetch all users from auth.users
-      const { data: authUsers, error } = await supabase.auth.admin.listUsers();
+      // Get current user's session
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (error) throw error;
+      if (!session) {
+        throw new Error('No active session');
+      }
 
-      const userData: UserData[] = authUsers.users.map(user => {
-        const metadata = user.user_metadata || {};
-        const isAdmin = user.email === 'admin@enrichx.com';
-        
-        return {
-          id: user.id,
-          email: user.email || '',
-          name: metadata.name || (isAdmin ? 'Admin User' : user.email?.split('@')[0] || ''),
-          company_name: metadata.company_name || '',
-          role: isAdmin ? 'admin' : (metadata.role || 'subscriber'),
-          subscription_tier: isAdmin ? 'enterprise' : (metadata.subscription_tier || 'free'),
-          credits_remaining: metadata.credits_remaining || getDefaultCredits(isAdmin ? 'enterprise' : (metadata.subscription_tier || 'free')),
-          credits_monthly_limit: getDefaultCredits(isAdmin ? 'enterprise' : (metadata.subscription_tier || 'free')),
-          subscription_status: metadata.subscription_status || 'active',
-          created_at: user.created_at,
-          last_sign_in_at: user.last_sign_in_at
-        };
+      // Call the secure edge function
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch users');
+      }
+
+      const { users: userData } = await response.json();
       setUsers(userData);
     } catch (error) {
       console.error('Error fetching users:', error);
+      alert(`Failed to fetch users: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -146,19 +145,30 @@ export default function AdminUsersPage() {
     if (!editingUser) return;
 
     try {
-      const { error } = await supabase.auth.admin.updateUserById(editingUser.id, {
-        user_metadata: {
-          name: editForm.name,
-          company_name: editForm.company_name,
-          role: editForm.role,
-          subscription_tier: editForm.subscription_tier,
-          credits_remaining: editForm.credits_remaining,
-          credits_monthly_limit: editForm.credits_monthly_limit,
-          subscription_status: editForm.subscription_status
-        }
+      // Get current user's session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('No active session');
+      }
+
+      // Call the secure edge function
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: editingUser.id,
+          userData: editForm
+        }),
       });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update user');
+      }
 
       // Update local state
       setUsers(prev => prev.map(user => 
@@ -171,7 +181,7 @@ export default function AdminUsersPage() {
       setEditingUser(null);
     } catch (error) {
       console.error('Error updating user:', error);
-      alert('Failed to update user');
+      alert(`Failed to update user: ${error.message}`);
     }
   };
 
@@ -183,14 +193,34 @@ export default function AdminUsersPage() {
 
     if (confirm(`Are you sure you want to delete user ${userEmail}?`)) {
       try {
-        const { error } = await supabase.auth.admin.deleteUser(userId);
+        // Get current user's session
+        const { data: { session } } = await supabase.auth.getSession();
         
-        if (error) throw error;
+        if (!session) {
+          throw new Error('No active session');
+        }
+
+        // Call the secure edge function
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: userId
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to delete user');
+        }
 
         setUsers(prev => prev.filter(user => user.id !== userId));
       } catch (error) {
         console.error('Error deleting user:', error);
-        alert('Failed to delete user');
+        alert(`Failed to delete user: ${error.message}`);
       }
     }
   };
