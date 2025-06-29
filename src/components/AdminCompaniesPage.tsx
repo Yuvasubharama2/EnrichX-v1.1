@@ -473,65 +473,65 @@ export default function AdminCompaniesPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[250px]">
                   Company
                 </th>
                 {visibleFields.company_type && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                     Type
                   </th>
                 )}
                 {visibleFields.industry && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                     Industry
                   </th>
                 )}
                 {visibleFields.hq_location && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
                     HQ Location
                   </th>
                 )}
                 {visibleFields.location_city && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                     City
                   </th>
                 )}
                 {visibleFields.location_state && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
                     State
                   </th>
                 )}
                 {visibleFields.size_range && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                     Size
                   </th>
                 )}
                 {visibleFields.headcount && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                     Headcount
                   </th>
                 )}
                 {visibleFields.revenue && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                     Revenue
                   </th>
                 )}
                 {visibleFields.phone_number && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[140px]">
                     Phone
                   </th>
                 )}
                 {visibleFields.technologies_used && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
                     Technologies
                   </th>
                 )}
                 {visibleFields.created_at && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                     Created
                   </th>
                 )}
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">
                   Visibility by Tier
                 </th>
               </tr>
@@ -539,22 +539,22 @@ export default function AdminCompaniesPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredCompanies.map((company) => (
                 <tr key={company.company_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                  <td className="px-4 py-4">
+                    <div className="flex items-center min-w-0">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
                         <Building2 className="w-5 h-5 text-blue-600" />
                       </div>
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-2">
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-gray-900 truncate">
                             {company.company_name}
                           </div>
-                          {visibleFields.website && company.website && (
+                          {company.website && (
                             <a
                               href={formatWebsiteUrl(company.website)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                              className="p-1 text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0"
                               title="Visit company website"
                             >
                               <Globe className="w-4 h-4" />
@@ -562,7 +562,7 @@ export default function AdminCompaniesPage() {
                           )}
                         </div>
                         {visibleFields.linkedin_url && company.linkedin_url && (
-                          <div className="text-xs text-blue-600 mt-1">
+                          <div className="text-xs text-blue-600 mt-1 truncate">
                             <a
                               href={company.linkedin_url}
                               target="_blank"
@@ -577,57 +577,57 @@ export default function AdminCompaniesPage() {
                     </div>
                   </td>
                   {visibleFields.company_type && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{company.company_type}</div>
                     </td>
                   )}
                   {visibleFields.industry && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{company.industry}</div>
                     </td>
                   )}
                   {visibleFields.hq_location && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{company.hq_location}</div>
                     </td>
                   )}
                   {visibleFields.location_city && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{company.location_city}</div>
                     </td>
                   )}
                   {visibleFields.location_state && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{company.location_state}</div>
                     </td>
                   )}
                   {visibleFields.size_range && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{company.size_range}</div>
-                      {visibleFields.headcount && company.headcount && (
-                        <div className="text-sm text-gray-500">{company.headcount} employees</div>
+                      {company.headcount && (
+                        <div className="text-xs text-gray-500">{company.headcount} employees</div>
                       )}
                     </td>
                   )}
                   {visibleFields.headcount && !visibleFields.size_range && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{company.headcount || '-'}</div>
                     </td>
                   )}
                   {visibleFields.revenue && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{company.revenue || '-'}</div>
                     </td>
                   )}
                   {visibleFields.phone_number && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{company.phone_number || '-'}</div>
                     </td>
                   )}
                   {visibleFields.technologies_used && (
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4">
                       <div className="flex flex-wrap gap-1">
-                        {company.technologies_used?.slice(0, 3).map((tech, index) => (
+                        {company.technologies_used?.slice(0, 2).map((tech, index) => (
                           <span
                             key={index}
                             className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800"
@@ -635,29 +635,29 @@ export default function AdminCompaniesPage() {
                             {tech}
                           </span>
                         ))}
-                        {company.technologies_used && company.technologies_used.length > 3 && (
+                        {company.technologies_used && company.technologies_used.length > 2 && (
                           <span className="text-xs text-gray-500">
-                            +{company.technologies_used.length - 3} more
+                            +{company.technologies_used.length - 2} more
                           </span>
                         )}
                       </div>
                     </td>
                   )}
                   {visibleFields.created_at && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">
                         {new Date(company.created_at).toLocaleDateString()}
                       </div>
                     </td>
                   )}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center justify-center space-x-4">
+                  <td className="px-4 py-4">
+                    <div className="flex items-center justify-center space-x-3">
                       {tiers.map((tier) => {
                         const isVisible = company.visible_to_tiers?.includes(tier) || false;
                         const isUpdating = updating === company.company_id;
                         
                         return (
-                          <div key={tier} className="flex items-center space-x-2">
+                          <div key={tier} className="flex flex-col items-center space-y-1">
                             <label className="flex items-center cursor-pointer">
                               <input
                                 type="checkbox"
