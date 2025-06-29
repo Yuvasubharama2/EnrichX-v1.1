@@ -44,9 +44,13 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
     { id: 'settings', name: 'Settings', icon: Settings },
   ];
 
-  const handleSignOut = () => {
-    logout();
-    navigate('/login');
+  const handleSignOut = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   const handleGoHome = () => {
@@ -211,6 +215,13 @@ export default function UserLayout({ children, activeTab, onTabChange }: UserLay
                 aria-label="Go to home page"
               >
                 <ArrowLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleSignOut}
+                className="p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                title="Sign out"
+              >
+                <LogOut className="w-5 h-5" />
               </button>
             </div>
           </div>

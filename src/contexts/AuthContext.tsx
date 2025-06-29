@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User } from '../types';
 import { supabase, updateUserMetadata } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string, subscriptionTier?: string) => Promise<any>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -22,13 +22,57 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
+
+  // Inactivity timeout (10 minutes)
+  const INACTIVITY_TIMEOUT = 10 * 60 * 1000; // 10 minutes in milliseconds
+
+  const resetInactivityTimer = () => {
+    lastActivityRef.current = Date.now();
+    
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+
+    if (user) {
+      inactivityTimerRef.current = setTimeout(() => {
+        console.log('User inactive for 10 minutes, logging out...');
+        logout();
+      }, INACTIVITY_TIMEOUT);
+    }
+  };
+
+  const setupActivityListeners = () => {
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    
+    const activityHandler = () => {
+      resetInactivityTimer();
+    };
+
+    events.forEach(event => {
+      document.addEventListener(event, activityHandler, true);
+    });
+
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, activityHandler, true);
+      });
+    };
+  };
 
   useEffect(() => {
+    let cleanupActivityListeners: (() => void) | null = null;
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         const userData = createUserFromSupabaseUser(session.user);
         setUser(userData);
+        
+        // Setup activity monitoring for logged-in users
+        cleanupActivityListeners = setupActivityListeners();
+        resetInactivityTimer();
       }
       setIsLoading(false);
     });
@@ -36,17 +80,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email);
+        
         if (session?.user) {
           const userData = createUserFromSupabaseUser(session.user);
           setUser(userData);
+          
+          // Setup activity monitoring for newly logged-in users
+          if (!cleanupActivityListeners) {
+            cleanupActivityListeners = setupActivityListeners();
+          }
+          resetInactivityTimer();
         } else {
           setUser(null);
+          
+          // Clean up activity listeners when user logs out
+          if (cleanupActivityListeners) {
+            cleanupActivityListeners();
+            cleanupActivityListeners = null;
+          }
+          
+          if (inactivityTimerRef.current) {
+            clearTimeout(inactivityTimerRef.current);
+            inactivityTimerRef.current = null;
+          }
         }
         setIsLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      if (cleanupActivityListeners) {
+        cleanupActivityListeners();
+      }
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    };
   }, []);
 
   const createUserFromSupabaseUser = (supabaseUser: any): User => {
@@ -144,8 +215,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    try {
+      // Clear inactivity timer
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+        inactivityTimerRef.current = null;
+      }
+
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Error signing out:', error);
+      }
+      
+      // Clear user state
+      setUser(null);
+      
+      console.log('User successfully logged out');
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Even if there's an error, clear the user state
+      setUser(null);
+    }
   };
 
   return (
