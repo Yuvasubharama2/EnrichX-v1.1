@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Database, Mail, Lock, Eye, EyeOff, Check, Settings, User } from 'lucide-react';
+import { Database, Mail, Lock, Eye, EyeOff, Check, Settings, User, Building2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import Logo from './Logo';
@@ -11,6 +11,8 @@ interface LoginPageProps {
 export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [isSignUp, setIsSignUp] = useState(initialIsSignup);
   const [showPassword, setShowPassword] = useState(false);
   const [subscriptionTier, setSubscriptionTier] = useState('pro');
@@ -21,7 +23,11 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const result = await login(email, password, isSignUp ? subscriptionTier : undefined);
+      const result = await login(email, password, isSignUp ? { 
+        subscriptionTier, 
+        name: name || email.split('@')[0], 
+        companyName 
+      } : undefined);
       
       // Check if this is admin login (not signup) and show dashboard choice
       if (email === 'admin@enrichx.com' && !isSignUp && result?.role === 'admin') {
@@ -124,6 +130,50 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
         {/* Login Form */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {isSignUp && (
+              <>
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <User className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      id="name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      placeholder="Enter your full name"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 mb-2">
+                    Company Name
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Building2 className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      id="companyName"
+                      type="text"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      placeholder="Enter your company name"
+                      required
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                 Email address
@@ -184,8 +234,8 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
                 <div className="space-y-3">
                   {[
                     { id: 'free', name: 'Free', credits: 50, price: '$0' },
-                    { id: 'pro', name: 'Pro', credits: 500, price: '$99' },
-                    { id: 'enterprise', name: 'Enterprise', credits: 1000, price: '$299' }
+                    { id: 'pro', name: 'Pro', credits: 2000, price: '$49' },
+                    { id: 'enterprise', name: 'Enterprise', credits: 10000, price: '$199' }
                   ].map((tier) => (
                     <button
                       key={tier.id}
@@ -200,7 +250,7 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
                       <div className="flex items-center justify-between">
                         <div>
                           <h4 className="font-semibold text-gray-900">{tier.name}</h4>
-                          <p className="text-sm text-gray-600">{tier.credits} credits/month</p>
+                          <p className="text-sm text-gray-600">{tier.credits.toLocaleString()} credits/month</p>
                         </div>
                         <div className="text-right">
                           <p className="font-semibold text-gray-900">{tier.price}</p>

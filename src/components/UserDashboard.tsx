@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, Star, Building2, Mail, Phone, MapPin, ExternalLink, Globe, ChevronDown, ChevronUp, X, Heart, BookmarkPlus, Check, Calendar, Linkedin } from 'lucide-react';
+import { Search, Filter, Download, Plus, Star, Building2, Mail, Phone, MapPin, ExternalLink, Globe, ChevronDown, ChevronUp, X, Heart, BookmarkPlus, Check, Calendar, Linkedin, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 import { useAuth } from '../contexts/AuthContext';
@@ -44,6 +44,7 @@ export default function UserDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [favoriteContacts, setFavoriteContacts] = useState<string[]>([]);
+  const [revealedEmails, setRevealedEmails] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showFieldSelector, setShowFieldSelector] = useState(false);
   const [showSaveListModal, setShowSaveListModal] = useState(false);
@@ -100,6 +101,7 @@ export default function UserDashboard() {
   useEffect(() => {
     fetchContacts();
     loadFavorites();
+    loadRevealedEmails();
   }, [user]);
 
   useEffect(() => {
@@ -135,9 +137,22 @@ export default function UserDashboard() {
     }
   };
 
+  const loadRevealedEmails = () => {
+    // Load revealed emails from localStorage
+    const saved = localStorage.getItem(`revealed_emails_${user?.id}`);
+    if (saved) {
+      setRevealedEmails(JSON.parse(saved));
+    }
+  };
+
   const saveFavorites = (favorites: string[]) => {
     localStorage.setItem(`contact_favorites_${user?.id}`, JSON.stringify(favorites));
     setFavoriteContacts(favorites);
+  };
+
+  const saveRevealedEmails = (revealed: string[]) => {
+    localStorage.setItem(`revealed_emails_${user?.id}`, JSON.stringify(revealed));
+    setRevealedEmails(revealed);
   };
 
   const applyFilters = () => {
@@ -223,6 +238,42 @@ export default function UserDashboard() {
       : [...favoriteContacts, contactId];
     
     saveFavorites(newFavorites);
+  };
+
+  const handleRevealEmail = async (contactId: string) => {
+    if (revealedEmails.includes(contactId)) {
+      return; // Already revealed
+    }
+
+    if (!user || user.credits_remaining <= 0) {
+      alert('Insufficient credits to reveal email');
+      return;
+    }
+
+    try {
+      // Deduct 1 credit from user
+      const newCredits = user.credits_remaining - 1;
+      
+      // Update user metadata in Supabase
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          ...user,
+          credits_remaining: newCredits
+        }
+      });
+
+      if (error) throw error;
+
+      // Add to revealed emails
+      const newRevealed = [...revealedEmails, contactId];
+      saveRevealedEmails(newRevealed);
+
+      // Update user context would happen automatically through auth state change
+      window.location.reload(); // Simple way to refresh user data
+    } catch (error) {
+      console.error('Error revealing email:', error);
+      alert('Failed to reveal email');
+    }
   };
 
   const handleFilterChange = (field: keyof FilterState, value: string, checked: boolean) => {
@@ -791,9 +842,29 @@ export default function UserDashboard() {
                     <td className="px-4 py-4">
                       <div className="space-y-1">
                         {contact.email ? (
-                          <div className="flex items-center text-sm text-gray-700">
-                            <Mail className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
-                            <span className="truncate">{contact.email}</span>
+                          <div className="flex items-center space-x-2">
+                            {revealedEmails.includes(contact.contact_id) ? (
+                              <div className="flex items-center text-sm text-gray-700">
+                                <Mail className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
+                                <span className="truncate">{contact.email}</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center space-x-2">
+                                <div className="flex items-center text-sm text-gray-500">
+                                  <Mail className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
+                                  <span>••••••@••••••.com</span>
+                                </div>
+                                <button
+                                  onClick={() => handleRevealEmail(contact.contact_id)}
+                                  disabled={user?.credits_remaining === 0}
+                                  className="flex items-center px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={user?.credits_remaining === 0 ? 'No credits remaining' : 'Reveal email (1 credit)'}
+                                >
+                                  <Eye className="w-3 h-3 mr-1" />
+                                  Reveal (1 credit)
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="text-sm text-gray-500">-</div>

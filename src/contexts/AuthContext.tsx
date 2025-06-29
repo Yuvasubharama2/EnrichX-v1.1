@@ -4,7 +4,7 @@ import { supabase, updateUserMetadata } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string, subscriptionTier?: string) => Promise<any>;
+  login: (email: string, password: string, signupData?: { subscriptionTier: string; name: string; companyName: string }) => Promise<any>;
   logout: () => Promise<void>;
   isLoading: boolean;
 }
@@ -145,27 +145,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const getDefaultCredits = (tier: string) => {
     switch (tier) {
       case 'enterprise': return 10000;
-      case 'pro': return 500;
+      case 'pro': return 2000;
       case 'free': return 50;
       default: return 50;
     }
   };
 
-  const login = async (email: string, password: string, subscriptionTier?: string) => {
+  const login = async (email: string, password: string, signupData?: { subscriptionTier: string; name: string; companyName: string }) => {
     setIsLoading(true);
     
     try {
-      // If subscriptionTier is provided, this is a sign-up attempt
-      if (subscriptionTier) {
+      // If signupData is provided, this is a sign-up attempt
+      if (signupData) {
         const role = email === 'admin@enrichx.com' ? 'admin' : 'subscriber';
-        const tier = email === 'admin@enrichx.com' ? 'enterprise' : subscriptionTier;
+        const tier = email === 'admin@enrichx.com' ? 'enterprise' : signupData.subscriptionTier;
         
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
-              name: email === 'admin@enrichx.com' ? 'Admin User' : 'User',
+              name: email === 'admin@enrichx.com' ? 'Admin User' : signupData.name,
+              company_name: signupData.companyName,
               role,
               subscription_tier: tier,
               credits_remaining: getDefaultCredits(tier),

@@ -8,7 +8,8 @@ import {
   LogOut,
   Menu,
   X,
-  User
+  User,
+  UserCog
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -30,6 +31,7 @@ export default function AdminLayout({ children, activeTab, onTabChange }: AdminL
     { id: 'companies', name: 'Companies', icon: Building2 },
     { id: 'contacts', name: 'Contacts', icon: Users },
     { id: 'upload', name: 'CSV Upload', icon: Upload },
+    { id: 'users', name: 'User Management', icon: UserCog },
     { id: 'settings', name: 'Settings', icon: Settings },
   ];
 

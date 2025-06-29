@@ -20,38 +20,24 @@ export default function BillingPage() {
       ]
     },
     {
-      id: 'starter',
-      name: 'Starter',
-      price: 49,
-      credits_per_month: 500,
-      features: [
-        '500 contact views per month',
-        'Advanced search filters',
-        'Unlimited exports',
-        'Save up to 10 lists',
-        'Email & chat support'
-      ]
-    },
-    {
       id: 'pro',
       name: 'Pro',
-      price: 149,
+      price: 49,
       credits_per_month: 2000,
       popular: true,
       features: [
         '2,000 contact views per month',
-        'All search filters',
+        'Advanced search filters',
         'Unlimited exports',
-        'Unlimited saved lists',
-        'API access',
-        'Priority support',
-        'Data enrichment'
+        'Save up to 50 lists',
+        'Email & chat support',
+        'API access'
       ]
     },
     {
       id: 'enterprise',
       name: 'Enterprise',
-      price: 499,
+      price: 199,
       credits_per_month: 10000,
       features: [
         '10,000+ contact views per month',
@@ -176,7 +162,7 @@ export default function BillingPage() {
       {/* Available Plans */}
       <div className="mb-8">
         <h3 className="text-2xl font-bold text-gray-900 mb-6">Available Plans</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {plans.map((plan) => (
             <div 
               key={plan.id} 

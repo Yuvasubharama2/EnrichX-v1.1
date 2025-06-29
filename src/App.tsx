@@ -8,6 +8,7 @@ import Dashboard from './components/Dashboard';
 import CSVUpload from './components/CSVUpload';
 import AdminCompaniesPage from './components/AdminCompaniesPage';
 import AdminContactsPage from './components/AdminContactsPage';
+import AdminUsersPage from './components/AdminUsersPage';
 import UserDashboard from './components/UserDashboard';
 import UserCompaniesPage from './components/UserCompaniesPage';
 import SavedLists from './components/SavedLists';
@@ -44,6 +45,8 @@ function AdminApp() {
         return <AdminCompaniesPage />;
       case 'contacts':
         return <AdminContactsPage />;
+      case 'users':
+        return <AdminUsersPage />;
       case 'settings':
         return (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
