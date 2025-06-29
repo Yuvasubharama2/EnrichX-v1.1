@@ -17,11 +17,14 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
   const [showPassword, setShowPassword] = useState(false);
   const [subscriptionTier, setSubscriptionTier] = useState('pro');
   const [showDashboardChoice, setShowDashboardChoice] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    
     try {
       const result = await login(email, password, isSignUp ? { 
         subscriptionTier, 
@@ -39,8 +42,9 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
         // Regular user - go to search dashboard
         navigate('/search');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Authentication failed:', error);
+      setError(error.message || 'Authentication failed. Please try again.');
     }
   };
 
@@ -129,6 +133,12 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
 
         {/* Login Form */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-6">
             {isSignUp && (
               <>
@@ -280,6 +290,7 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
             <button
               onClick={() => {
                 setIsSignUp(!isSignUp);
+                setError(null);
                 navigate(isSignUp ? '/login' : '/signup');
               }}
               className="text-sm text-blue-600 hover:text-blue-700 font-medium"
