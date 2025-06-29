@@ -304,12 +304,43 @@ export default function UserDashboard() {
   };
 
   const handleCreateList = () => {
-    // Mock save to list functionality
-    console.log('Creating list:', {
+    if (!newListName.trim() || selectedContacts.length === 0) return;
+
+    // Get selected contact data
+    const selectedContactData = contacts.filter(c => selectedContacts.includes(c.contact_id));
+    
+    // Create new list
+    const newList = {
+      id: Date.now().toString(),
+      user_id: user?.id || '',
       name: newListName,
       description: newListDescription,
-      contacts: selectedContacts
-    });
+      contact_count: selectedContactData.length,
+      created_at: new Date(),
+      updated_at: new Date(),
+      contacts: selectedContactData.map(contact => ({
+        contact_id: contact.contact_id,
+        name: contact.name,
+        job_title: contact.job_title,
+        company_name: contact.company?.company_name || '',
+        email: contact.email,
+        phone_number: contact.phone_number,
+        location_city: contact.location_city,
+        location_state: contact.location_state,
+        department: contact.department,
+        linkedin_url: contact.linkedin_url,
+        added_at: new Date()
+      }))
+    };
+
+    // Load existing contact lists
+    const existingLists = JSON.parse(localStorage.getItem(`contact_lists_${user?.id}`) || '[]');
+    
+    // Add new list
+    const updatedLists = [...existingLists, newList];
+    
+    // Save to localStorage
+    localStorage.setItem(`contact_lists_${user?.id}`, JSON.stringify(updatedLists));
     
     // Show success message
     alert(`Successfully saved ${selectedContacts.length} contacts to "${newListName}"`);
@@ -851,7 +882,7 @@ export default function UserDashboard() {
                   <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
                     <BookmarkPlus className="w-5 h-5 text-blue-600" />
                   </div>
-                  <h3 className="text-lg font-medium text-gray-900">Save to List</h3>
+                  <h3 className="text-lg font-medium text-gray-900">Save to Contact List</h3>
                 </div>
                 
                 <p className="text-sm text-gray-600 mb-4">

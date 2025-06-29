@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Trash2, Download, Users, Calendar, Edit3, Building2, Star, Check, X } from 'lucide-react';
+import { Plus, Search, Trash2, Download, Users, Calendar, Edit3, Building2, Star, Check, X, Eye, ArrowLeft } from 'lucide-react';
 import { SavedList } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -14,6 +14,7 @@ export default function SavedLists() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingList, setEditingList] = useState<SavedListWithItems | null>(null);
+  const [viewingList, setViewingList] = useState<SavedListWithItems | null>(null);
   const [newListName, setNewListName] = useState('');
   const [newListDescription, setNewListDescription] = useState('');
   const [companyLists, setCompanyLists] = useState<SavedListWithItems[]>([]);
@@ -33,39 +34,6 @@ export default function SavedLists() {
         updated_at: new Date(list.updated_at)
       }));
       setCompanyLists(parsedLists);
-    } else {
-      // Create some sample company lists
-      const sampleCompanyLists = [
-        {
-          id: '1',
-          user_id: user?.id || '',
-          name: 'Tech Startups',
-          description: 'Promising technology startups in Silicon Valley',
-          contact_count: 15,
-          created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-          updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-          companies: [
-            { company_id: '1', company_name: 'TechCorp Inc.', industry: 'Software', location_city: 'San Francisco', size_range: '201-500' },
-            { company_id: '2', company_name: 'InnovateLabs', industry: 'AI/ML', location_city: 'Palo Alto', size_range: '51-200' },
-            { company_id: '3', company_name: 'DataFlow Systems', industry: 'Data Analytics', location_city: 'Mountain View', size_range: '101-500' }
-          ]
-        },
-        {
-          id: '2',
-          user_id: user?.id || '',
-          name: 'Fortune 500 Companies',
-          description: 'Large enterprise companies for partnership opportunities',
-          contact_count: 8,
-          created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-          updated_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-          companies: [
-            { company_id: '4', company_name: 'Global Corp', industry: 'Manufacturing', location_city: 'New York', size_range: '10000+' },
-            { company_id: '5', company_name: 'MegaTech Solutions', industry: 'Technology', location_city: 'Seattle', size_range: '5001-10000' }
-          ]
-        }
-      ];
-      setCompanyLists(sampleCompanyLists);
-      localStorage.setItem(`company_lists_${user?.id}`, JSON.stringify(sampleCompanyLists));
     }
 
     // Load contact lists from localStorage
@@ -77,39 +45,6 @@ export default function SavedLists() {
         updated_at: new Date(list.updated_at)
       }));
       setContactLists(parsedLists);
-    } else {
-      // Create some sample contact lists
-      const sampleContactLists = [
-        {
-          id: '1',
-          user_id: user?.id || '',
-          name: 'Engineering Leaders',
-          description: 'CTOs, VPs of Engineering, and Tech Directors',
-          contact_count: 12,
-          created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-          updated_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-          contacts: [
-            { contact_id: '1', name: 'Sarah Johnson', job_title: 'VP of Engineering', company_name: 'TechCorp Inc.', email: 'sarah@techcorp.com' },
-            { contact_id: '2', name: 'Michael Chen', job_title: 'CTO', company_name: 'InnovateLabs', email: 'michael@innovatelabs.com' },
-            { contact_id: '3', name: 'Emily Rodriguez', job_title: 'Engineering Director', company_name: 'DataFlow Systems', email: 'emily@dataflow.com' }
-          ]
-        },
-        {
-          id: '2',
-          user_id: user?.id || '',
-          name: 'Sales Prospects',
-          description: 'Potential customers for Q1 outreach campaign',
-          contact_count: 25,
-          created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-          updated_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-          contacts: [
-            { contact_id: '4', name: 'David Kim', job_title: 'Head of Sales', company_name: 'Global Corp', email: 'david@globalcorp.com' },
-            { contact_id: '5', name: 'Lisa Wang', job_title: 'Sales Director', company_name: 'MegaTech Solutions', email: 'lisa@megatech.com' }
-          ]
-        }
-      ];
-      setContactLists(sampleContactLists);
-      localStorage.setItem(`contact_lists_${user?.id}`, JSON.stringify(sampleContactLists));
     }
   };
 
@@ -202,25 +137,27 @@ export default function SavedLists() {
 
     if (activeTab === 'companies' && list.companies) {
       csvContent = [
-        ['Company Name', 'Industry', 'Location', 'Size', 'Date Added'].join(','),
+        ['Company Name', 'Industry', 'Location', 'Size', 'Website', 'Date Added'].join(','),
         ...list.companies.map((company: any) => [
           company.company_name,
           company.industry,
           company.location_city,
           company.size_range,
-          new Date().toLocaleDateString()
+          company.website || '',
+          new Date(company.added_at || Date.now()).toLocaleDateString()
         ].map(field => `"${field}"`).join(','))
       ].join('\n');
       filename = `${list.name.replace(/\s+/g, '_')}_companies_export.csv`;
     } else if (activeTab === 'contacts' && list.contacts) {
       csvContent = [
-        ['Name', 'Job Title', 'Company', 'Email', 'Date Added'].join(','),
+        ['Name', 'Job Title', 'Company', 'Email', 'Phone', 'Date Added'].join(','),
         ...list.contacts.map((contact: any) => [
           contact.name,
           contact.job_title,
           contact.company_name || '',
           contact.email || '',
-          new Date().toLocaleDateString()
+          contact.phone_number || '',
+          new Date(contact.added_at || Date.now()).toLocaleDateString()
         ].map(field => `"${field}"`).join(','))
       ].join('\n');
       filename = `${list.name.replace(/\s+/g, '_')}_contacts_export.csv`;
@@ -235,11 +172,161 @@ export default function SavedLists() {
     URL.revokeObjectURL(url);
   };
 
+  const handleViewList = (list: SavedListWithItems) => {
+    setViewingList(list);
+  };
+
   const currentLists = activeTab === 'companies' ? companyLists : contactLists;
   const filteredLists = currentLists.filter(list =>
     list.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     list.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // If viewing a specific list, show the list details
+  if (viewingList) {
+    return (
+      <div className="max-w-7xl mx-auto p-6">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center space-x-4 mb-4">
+            <button
+              onClick={() => setViewingList(null)}
+              className="flex items-center px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 mr-2" />
+              Back to Lists
+            </button>
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-gray-900">{viewingList.name}</h1>
+              {viewingList.description && (
+                <p className="text-gray-600 mt-1">{viewingList.description}</p>
+              )}
+            </div>
+            <button
+              onClick={() => handleExportList(viewingList)}
+              className="flex items-center px-4 py-2 text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export List
+            </button>
+          </div>
+
+          <div className="flex items-center space-x-4 text-sm text-gray-600">
+            <span>
+              {activeTab === 'companies' 
+                ? `${viewingList.companies?.length || 0} companies`
+                : `${viewingList.contacts?.length || 0} contacts`
+              }
+            </span>
+            <span>•</span>
+            <span>Created {viewingList.created_at.toLocaleDateString()}</span>
+            <span>•</span>
+            <span>Updated {viewingList.updated_at.toLocaleDateString()}</span>
+          </div>
+        </div>
+
+        {/* List Content */}
+        {activeTab === 'companies' && viewingList.companies ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Industry</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Website</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {viewingList.companies.map((company: any, index: number) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                            <Building2 className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div className="text-sm font-medium text-gray-900">{company.company_name}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{company.industry}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {company.location_city}, {company.location_state}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{company.size_range}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {company.website ? (
+                          <a
+                            href={company.website.startsWith('http') ? company.website : `https://${company.website}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            Visit
+                          </a>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : activeTab === 'contacts' && viewingList.contacts ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job Title</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {viewingList.contacts.map((contact: any, index: number) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                            <span className="text-purple-600 font-semibold text-sm">
+                              {contact.name.split(' ').map((n: string) => n[0]).join('')}
+                            </span>
+                          </div>
+                          <div className="text-sm font-medium text-gray-900">{contact.name}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{contact.job_title}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{contact.company_name}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{contact.email || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{contact.phone_number || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              {activeTab === 'companies' ? (
+                <Building2 className="w-8 h-8 text-gray-400" />
+              ) : (
+                <Users className="w-8 h-8 text-gray-400" />
+              )}
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No {activeTab} in this list</h3>
+            <p className="text-gray-600">This list is empty. Add some {activeTab} to get started.</p>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto p-6">
@@ -416,7 +503,11 @@ export default function SavedLists() {
             )}
 
             <div className="flex items-center space-x-2">
-              <button className="flex-1 flex items-center justify-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">
+              <button 
+                onClick={() => handleViewList(list)}
+                className="flex-1 flex items-center justify-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <Eye className="w-4 h-4 mr-2" />
                 View {activeTab === 'companies' ? 'Companies' : 'Contacts'}
               </button>
               <button 

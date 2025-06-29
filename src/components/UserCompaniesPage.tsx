@@ -232,12 +232,41 @@ export default function UserCompaniesPage() {
   };
 
   const handleCreateList = () => {
-    // Mock save to list functionality
-    console.log('Creating list:', {
+    if (!newListName.trim() || selectedCompanies.length === 0) return;
+
+    // Get selected company data
+    const selectedCompanyData = companies.filter(c => selectedCompanies.includes(c.company_id));
+    
+    // Create new list
+    const newList = {
+      id: Date.now().toString(),
+      user_id: user?.id || '',
       name: newListName,
       description: newListDescription,
-      companies: selectedCompanies
-    });
+      contact_count: selectedCompanyData.length,
+      created_at: new Date(),
+      updated_at: new Date(),
+      companies: selectedCompanyData.map(company => ({
+        company_id: company.company_id,
+        company_name: company.company_name,
+        industry: company.industry,
+        location_city: company.location_city,
+        location_state: company.location_state,
+        size_range: company.size_range,
+        website: company.website,
+        linkedin_url: company.linkedin_url,
+        added_at: new Date()
+      }))
+    };
+
+    // Load existing company lists
+    const existingLists = JSON.parse(localStorage.getItem(`company_lists_${user?.id}`) || '[]');
+    
+    // Add new list
+    const updatedLists = [...existingLists, newList];
+    
+    // Save to localStorage
+    localStorage.setItem(`company_lists_${user?.id}`, JSON.stringify(updatedLists));
     
     // Show success message
     alert(`Successfully saved ${selectedCompanies.length} companies to "${newListName}"`);
@@ -806,7 +835,7 @@ export default function UserCompaniesPage() {
                   <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
                     <BookmarkPlus className="w-5 h-5 text-blue-600" />
                   </div>
-                  <h3 className="text-lg font-medium text-gray-900">Save to List</h3>
+                  <h3 className="text-lg font-medium text-gray-900">Save to Company List</h3>
                 </div>
                 
                 <p className="text-sm text-gray-600 mb-4">
