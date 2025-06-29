@@ -26,7 +26,6 @@ interface VisibleFields {
   location_state: boolean;
   location_region: boolean;
   size_range: boolean;
-  headcount: boolean;
   revenue: boolean;
   phone_number: boolean;
   company_keywords: boolean;
@@ -66,7 +65,6 @@ export default function AdminCompaniesPage() {
     location_state: false,
     location_region: false,
     size_range: true,
-    headcount: false,
     revenue: false,
     phone_number: false,
     company_keywords: false,
@@ -321,6 +319,11 @@ export default function AdminCompaniesPage() {
                 </label>
               ))}
             </div>
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs text-blue-800">
+                <strong>Note:</strong> Headcount is automatically displayed below the Size field when Size is visible.
+              </p>
+            </div>
           </div>
         )}
 
@@ -506,11 +509,6 @@ export default function AdminCompaniesPage() {
                     Size
                   </th>
                 )}
-                {visibleFields.headcount && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
-                    Headcount
-                  </th>
-                )}
                 {visibleFields.revenue && (
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                     Revenue
@@ -605,13 +603,8 @@ export default function AdminCompaniesPage() {
                     <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{company.size_range}</div>
                       {company.headcount && (
-                        <div className="text-xs text-gray-500">{company.headcount} employees</div>
+                        <div className="text-xs text-gray-500 mt-1">{company.headcount.toLocaleString()} employees</div>
                       )}
-                    </td>
-                  )}
-                  {visibleFields.headcount && !visibleFields.size_range && (
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">{company.headcount || '-'}</div>
                     </td>
                   )}
                   {visibleFields.revenue && (
