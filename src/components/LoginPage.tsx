@@ -287,15 +287,6 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
               {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
             </button>
           </div>
-
-          {/* Demo Credentials */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <p className="text-xs text-gray-600 mb-2 font-medium">Demo Credentials:</p>
-            <div className="space-y-1 text-xs text-gray-500">
-              <p><strong>Admin:</strong> admin@enrichx.com / Yuva8856@</p>
-              <p><strong>User:</strong> user@enrichx.com / user123</p>
-            </div>
-          </div>
         </div>
 
         {/* Features */}
