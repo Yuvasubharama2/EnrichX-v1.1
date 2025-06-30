@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Filter, Building2, Mail, Phone, CheckCircle, RefreshCw, Globe, ChevronDown, ChevronUp, X, ExternalLink, Calendar, Linkedin } from 'lucide-react';
+import { Users, Search, Filter, Building2, Mail, Phone, CheckCircle, RefreshCw, Globe, ChevronDown, ChevronUp, X, ExternalLink, Calendar, Linkedin, Shield, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 
@@ -18,6 +18,7 @@ interface FilterState {
   email_score_range: string[];
   has_email: string;
   has_phone: string;
+  visibility_tier: string[];
 }
 
 interface VisibleFields {
@@ -46,6 +47,9 @@ export default function AdminContactsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showFieldSelector, setShowFieldSelector] = useState(false);
+  const [showVisibilityPanel, setShowVisibilityPanel] = useState(false);
+  const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+  const [bulkVisibilityTier, setBulkVisibilityTier] = useState<SubscriptionTier>('free');
 
   const [filters, setFilters] = useState<FilterState>({
     job_title: [],
@@ -56,7 +60,8 @@ export default function AdminContactsPage() {
     company_name: [],
     email_score_range: [],
     has_email: '',
-    has_phone: ''
+    has_phone: '',
+    visibility_tier: []
   });
 
   const [visibleFields, setVisibleFields] = useState<VisibleFields>({
@@ -93,6 +98,14 @@ export default function AdminContactsPage() {
     }
     
     return values.sort();
+  };
+
+  // Get unique visibility tiers
+  const getUniqueVisibilityTiers = () => {
+    const allTiers = contacts
+      .flatMap(contact => contact.visible_to_tiers || [])
+      .filter((value, index, self) => self.indexOf(value) === index);
+    return allTiers.sort();
   };
 
   useEffect(() => {
@@ -153,6 +166,11 @@ export default function AdminContactsPage() {
         filtered = filtered.filter(contact => 
           values.includes(contact.company?.company_name || '')
         );
+      } else if (field === 'visibility_tier' && Array.isArray(values) && values.length > 0) {
+        filtered = filtered.filter(contact => {
+          const contactTiers = contact.visible_to_tiers || [];
+          return values.some(tier => contactTiers.includes(tier as SubscriptionTier));
+        });
       } else if (field === 'email_score_range' && Array.isArray(values) && values.length > 0) {
         filtered = filtered.filter(contact => {
           if (!contact.email_score) return values.includes('No Score');
@@ -229,6 +247,66 @@ export default function AdminContactsPage() {
     }
   };
 
+  const handleBulkVisibilityUpdate = async (action: 'add' | 'remove') => {
+    if (selectedContacts.length === 0) return;
+
+    try {
+      setUpdating('bulk');
+      
+      for (const contactId of selectedContacts) {
+        const contact = contacts.find(c => c.contact_id === contactId);
+        if (!contact) continue;
+
+        let updatedTiers = [...(contact.visible_to_tiers || [])];
+        
+        if (action === 'add') {
+          if (!updatedTiers.includes(bulkVisibilityTier)) {
+            updatedTiers.push(bulkVisibilityTier);
+          }
+        } else {
+          updatedTiers = updatedTiers.filter(t => t !== bulkVisibilityTier);
+        }
+
+        const { error } = await supabase
+          .from('contacts')
+          .update({ visible_to_tiers: updatedTiers })
+          .eq('contact_id', contactId);
+
+        if (error) throw error;
+
+        // Update local state
+        setContacts(prev => prev.map(c => 
+          c.contact_id === contactId 
+            ? { ...c, visible_to_tiers: updatedTiers }
+            : c
+        ));
+      }
+
+      setSelectedContacts([]);
+      setShowVisibilityPanel(false);
+    } catch (error) {
+      console.error('Error updating bulk visibility:', error);
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const handleSelectContact = (contactId: string) => {
+    setSelectedContacts(prev => 
+      prev.includes(contactId) 
+        ? prev.filter(id => id !== contactId)
+        : [...prev, contactId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    setSelectedContacts(
+      selectedContacts.length === filteredContacts.length 
+        ? [] 
+        : filteredContacts.map(c => c.contact_id)
+    );
+  };
+
   const handleFilterChange = (field: keyof FilterState, value: string, checked: boolean) => {
     setFilters(prev => {
       if (field === 'has_email' || field === 'has_phone') {
@@ -258,7 +336,8 @@ export default function AdminContactsPage() {
       company_name: [],
       email_score_range: [],
       has_email: '',
-      has_phone: ''
+      has_phone: '',
+      visibility_tier: []
     });
   };
 
@@ -302,6 +381,15 @@ export default function AdminContactsPage() {
     });
   };
 
+  const getTierColor = (tier: SubscriptionTier) => {
+    switch (tier) {
+      case 'free': return 'text-green-600 bg-green-100';
+      case 'pro': return 'text-blue-600 bg-blue-100';
+      case 'enterprise': return 'text-purple-600 bg-purple-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
   const tiers: SubscriptionTier[] = ['free', 'pro', 'enterprise'];
 
   if (loading) {
@@ -336,6 +424,61 @@ export default function AdminContactsPage() {
           </span>
         </div>
       </div>
+
+      {/* Bulk Actions */}
+      {selectedContacts.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-blue-800 font-medium">
+              {selectedContacts.length} contact{selectedContacts.length !== 1 ? 's' : ''} selected
+            </span>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setShowVisibilityPanel(!showVisibilityPanel)}
+                className="flex items-center px-4 py-2 text-blue-700 bg-white border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                Manage Visibility
+                {showVisibilityPanel ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Bulk Visibility Panel */}
+          {showVisibilityPanel && (
+            <div className="mt-4 p-4 bg-white border border-blue-200 rounded-lg">
+              <h4 className="text-sm font-medium text-blue-900 mb-3">Bulk Visibility Management</h4>
+              <div className="flex items-center space-x-4">
+                <select
+                  value={bulkVisibilityTier}
+                  onChange={(e) => setBulkVisibilityTier(e.target.value as SubscriptionTier)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="free">Free Tier</option>
+                  <option value="pro">Pro Tier</option>
+                  <option value="enterprise">Enterprise Tier</option>
+                </select>
+                <button
+                  onClick={() => handleBulkVisibilityUpdate('add')}
+                  disabled={updating === 'bulk'}
+                  className="flex items-center px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Grant Access
+                </button>
+                <button
+                  onClick={() => handleBulkVisibilityUpdate('remove')}
+                  disabled={updating === 'bulk'}
+                  className="flex items-center px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  <EyeOff className="w-4 h-4 mr-2" />
+                  Revoke Access
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Search and Controls */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
@@ -417,6 +560,26 @@ export default function AdminContactsPage() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Visibility Tier Filter */}
+              <div>
+                <h5 className="text-sm font-medium text-gray-700 mb-2">Visibility Tier</h5>
+                <div className="space-y-2">
+                  {getUniqueVisibilityTiers().map((tier) => (
+                    <label key={tier} className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.visibility_tier.includes(tier)}
+                        onChange={(e) => handleFilterChange('visibility_tier', tier, e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${getTierColor(tier)}`}>
+                        {tier}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               {/* Job Title Filter */}
               <div>
                 <h5 className="text-sm font-medium text-gray-700 mb-2">Job Title</h5>
@@ -471,42 +634,6 @@ export default function AdminContactsPage() {
                 </div>
               </div>
 
-              {/* City Filter */}
-              <div>
-                <h5 className="text-sm font-medium text-gray-700 mb-2">City</h5>
-                <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {getUniqueValues('location_city').map((city) => (
-                    <label key={city} className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={filters.location_city.includes(city)}
-                        onChange={(e) => handleFilterChange('location_city', city, e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-600">{city}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* State Filter */}
-              <div>
-                <h5 className="text-sm font-medium text-gray-700 mb-2">State</h5>
-                <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {getUniqueValues('location_state').map((state) => (
-                    <label key={state} className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={filters.location_state.includes(state)}
-                        onChange={(e) => handleFilterChange('location_state', state, e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-600">{state}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
               {/* Email Score Filter */}
               <div>
                 <h5 className="text-sm font-medium text-gray-700 mb-2">Email Score</h5>
@@ -551,33 +678,6 @@ export default function AdminContactsPage() {
                   </label>
                 </div>
               </div>
-
-              {/* Has Phone Filter */}
-              <div>
-                <h5 className="text-sm font-medium text-gray-700 mb-2">Has Phone</h5>
-                <div className="space-y-2">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="has_phone"
-                      checked={filters.has_phone === 'yes'}
-                      onChange={(e) => handleFilterChange('has_phone', 'yes', e.target.checked)}
-                      className="border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-600">Yes</span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="has_phone"
-                      checked={filters.has_phone === 'no'}
-                      onChange={(e) => handleFilterChange('has_phone', 'no', e.target.checked)}
-                      className="border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-600">No</span>
-                  </label>
-                </div>
-              </div>
             </div>
           </div>
         )}
@@ -586,9 +686,17 @@ export default function AdminContactsPage() {
       {/* Results Summary */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-600">
-            Showing {filteredContacts.length} of {contacts.length} contacts
-          </span>
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={selectedContacts.length === filteredContacts.length && filteredContacts.length > 0}
+              onChange={handleSelectAll}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-600">
+              Showing {filteredContacts.length} of {contacts.length} contacts
+            </span>
+          </div>
           {getActiveFiltersCount() > 0 && (
             <span className="text-sm text-blue-600">
               {getActiveFiltersCount()} filter{getActiveFiltersCount() !== 1 ? 's' : ''} applied
@@ -603,6 +711,14 @@ export default function AdminContactsPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                  <input
+                    type="checkbox"
+                    checked={selectedContacts.length === filteredContacts.length && filteredContacts.length > 0}
+                    onChange={handleSelectAll}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">
                   Contact
                 </th>
@@ -619,11 +735,6 @@ export default function AdminContactsPage() {
                 {visibleFields.department && (
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                     Department
-                  </th>
-                )}
-                {visibleFields.start_date && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
-                    Start Date
                   </th>
                 )}
                 {visibleFields.email && (
@@ -646,16 +757,6 @@ export default function AdminContactsPage() {
                     State
                   </th>
                 )}
-                {visibleFields.location_region && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
-                    Region
-                  </th>
-                )}
-                {visibleFields.created_at && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
-                    Created
-                  </th>
-                )}
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">
                   Visibility by Tier
                 </th>
@@ -664,6 +765,14 @@ export default function AdminContactsPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredContacts.map((contact) => (
                 <tr key={contact.contact_id} className="hover:bg-gray-50">
+                  <td className="px-4 py-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedContacts.includes(contact.contact_id)}
+                      onChange={() => handleSelectContact(contact.contact_id)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </td>
                   <td className="px-4 py-4">
                     <div className="flex items-center min-w-0">
                       <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
@@ -687,6 +796,17 @@ export default function AdminContactsPage() {
                               <Linkedin className="w-4 h-4" />
                             </a>
                           )}
+                        </div>
+                        {/* Show current visibility tiers */}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {(contact.visible_to_tiers || []).map((tier) => (
+                            <span
+                              key={tier}
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium capitalize ${getTierColor(tier)}`}
+                            >
+                              {tier}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -720,14 +840,6 @@ export default function AdminContactsPage() {
                   {visibleFields.department && (
                     <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{contact.department || '-'}</div>
-                    </td>
-                  )}
-                  {visibleFields.start_date && (
-                    <td className="px-4 py-4">
-                      <div className="flex items-center text-sm text-gray-900">
-                        <Calendar className="w-4 h-4 mr-1 text-gray-400" />
-                        {formatDate(contact.start_date)}
-                      </div>
                     </td>
                   )}
                   {visibleFields.email && (
@@ -771,18 +883,6 @@ export default function AdminContactsPage() {
                       <div className="text-sm text-gray-900">{contact.location_state}</div>
                     </td>
                   )}
-                  {visibleFields.location_region && (
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">{contact.location_region}</div>
-                    </td>
-                  )}
-                  {visibleFields.created_at && (
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">
-                        {new Date(contact.created_at).toLocaleDateString()}
-                      </div>
-                    </td>
-                  )}
                   <td className="px-4 py-4">
                     <div className="flex items-center justify-center space-x-3">
                       {tiers.map((tier) => {
@@ -809,11 +909,7 @@ export default function AdminContactsPage() {
                                 )}
                               </div>
                             </label>
-                            <span className={`text-xs font-medium capitalize ${
-                              tier === 'free' ? 'text-green-600' :
-                              tier === 'pro' ? 'text-blue-600' :
-                              'text-purple-600'
-                            }`}>
+                            <span className={`text-xs font-medium capitalize ${getTierColor(tier).split(' ')[0]}`}>
                               {tier}
                             </span>
                           </div>
@@ -841,28 +937,33 @@ export default function AdminContactsPage() {
         )}
       </div>
 
-      {/* Legend */}
+      {/* Enhanced Legend */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-blue-900 mb-2">Visibility Control</h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-blue-800">
+        <h4 className="text-sm font-medium text-blue-900 mb-2">Visibility Control & User Access Management</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-blue-800 mb-4">
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 bg-green-100 border border-green-300 rounded flex items-center justify-center">
               <CheckCircle className="w-2 h-2 text-green-600" />
             </div>
-            <span><strong>Free:</strong> Basic access users</span>
+            <span><strong>Free:</strong> Basic access users (50 credits/month)</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 bg-blue-100 border border-blue-300 rounded flex items-center justify-center">
               <CheckCircle className="w-2 h-2 text-blue-600" />
             </div>
-            <span><strong>Pro:</strong> Professional plan users</span>
+            <span><strong>Pro:</strong> Professional plan users (2,000 credits/month)</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 bg-purple-100 border border-purple-300 rounded flex items-center justify-center">
               <CheckCircle className="w-2 h-2 text-purple-600" />
             </div>
-            <span><strong>Enterprise:</strong> Enterprise plan users</span>
+            <span><strong>Enterprise:</strong> Enterprise plan users (10,000 credits/month)</span>
           </div>
+        </div>
+        <div className="text-xs text-blue-700 space-y-1">
+          <p><strong>Bulk Actions:</strong> Select multiple contacts to manage visibility across subscription tiers simultaneously.</p>
+          <p><strong>Access Control:</strong> Contacts are only visible to users whose subscription tier is included in the visibility settings.</p>
+          <p><strong>Real-time Updates:</strong> Visibility changes take effect immediately for all users.</p>
         </div>
       </div>
     </div>

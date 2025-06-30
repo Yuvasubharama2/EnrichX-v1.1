@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Search, Filter, Eye, EyeOff, CheckCircle, XCircle, RefreshCw, Globe, ChevronDown, ChevronUp, X, Linkedin } from 'lucide-react';
+import { Building2, Search, Filter, Eye, EyeOff, CheckCircle, XCircle, RefreshCw, Globe, ChevronDown, ChevronUp, X, Linkedin, Shield, Users as UsersIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
 
@@ -14,6 +14,7 @@ interface FilterState {
   location_region: string[];
   size_range: string[];
   revenue: string[];
+  visibility_tier: string[];
 }
 
 interface VisibleFields {
@@ -44,6 +45,9 @@ export default function AdminCompaniesPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showFieldSelector, setShowFieldSelector] = useState(false);
+  const [showVisibilityPanel, setShowVisibilityPanel] = useState(false);
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
+  const [bulkVisibilityTier, setBulkVisibilityTier] = useState<SubscriptionTier>('free');
 
   const [filters, setFilters] = useState<FilterState>({
     company_type: [],
@@ -52,7 +56,8 @@ export default function AdminCompaniesPage() {
     location_state: [],
     location_region: [],
     size_range: [],
-    revenue: []
+    revenue: [],
+    visibility_tier: []
   });
 
   const [visibleFields, setVisibleFields] = useState<VisibleFields>({
@@ -81,6 +86,14 @@ export default function AdminCompaniesPage() {
       .filter(value => value && value !== '')
       .filter((value, index, self) => self.indexOf(value) === index);
     return values.sort();
+  };
+
+  // Get unique visibility tiers
+  const getUniqueVisibilityTiers = () => {
+    const allTiers = companies
+      .flatMap(company => company.visible_to_tiers || [])
+      .filter((value, index, self) => self.indexOf(value) === index);
+    return allTiers.sort();
   };
 
   useEffect(() => {
@@ -133,10 +146,17 @@ export default function AdminCompaniesPage() {
     // Apply filters
     Object.entries(filters).forEach(([field, values]) => {
       if (values.length > 0) {
-        filtered = filtered.filter(company => {
-          const companyValue = company[field as keyof Company];
-          return values.includes(companyValue as string);
-        });
+        if (field === 'visibility_tier') {
+          filtered = filtered.filter(company => {
+            const companyTiers = company.visible_to_tiers || [];
+            return values.some(tier => companyTiers.includes(tier as SubscriptionTier));
+          });
+        } else {
+          filtered = filtered.filter(company => {
+            const companyValue = company[field as keyof Company];
+            return values.includes(companyValue as string);
+          });
+        }
       }
     });
 
@@ -147,7 +167,7 @@ export default function AdminCompaniesPage() {
     setUpdating(companyId);
     
     try {
-      const company = companies.fin(c => c.company_id === companyId);
+      const company = companies.find(c => c.company_id === companyId);
       if (!company) return;
 
       let updatedTiers = [...(company.visible_to_tiers || [])];
@@ -180,6 +200,66 @@ export default function AdminCompaniesPage() {
     }
   };
 
+  const handleBulkVisibilityUpdate = async (action: 'add' | 'remove') => {
+    if (selectedCompanies.length === 0) return;
+
+    try {
+      setUpdating('bulk');
+      
+      for (const companyId of selectedCompanies) {
+        const company = companies.find(c => c.company_id === companyId);
+        if (!company) continue;
+
+        let updatedTiers = [...(company.visible_to_tiers || [])];
+        
+        if (action === 'add') {
+          if (!updatedTiers.includes(bulkVisibilityTier)) {
+            updatedTiers.push(bulkVisibilityTier);
+          }
+        } else {
+          updatedTiers = updatedTiers.filter(t => t !== bulkVisibilityTier);
+        }
+
+        const { error } = await supabase
+          .from('companies')
+          .update({ visible_to_tiers: updatedTiers })
+          .eq('company_id', companyId);
+
+        if (error) throw error;
+
+        // Update local state
+        setCompanies(prev => prev.map(c => 
+          c.company_id === companyId 
+            ? { ...c, visible_to_tiers: updatedTiers }
+            : c
+        ));
+      }
+
+      setSelectedCompanies([]);
+      setShowVisibilityPanel(false);
+    } catch (error) {
+      console.error('Error updating bulk visibility:', error);
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const handleSelectCompany = (companyId: string) => {
+    setSelectedCompanies(prev => 
+      prev.includes(companyId) 
+        ? prev.filter(id => id !== companyId)
+        : [...prev, companyId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    setSelectedCompanies(
+      selectedCompanies.length === filteredCompanies.length 
+        ? [] 
+        : filteredCompanies.map(c => c.company_id)
+    );
+  };
+
   const handleFilterChange = (field: keyof FilterState, value: string, checked: boolean) => {
     setFilters(prev => ({
       ...prev,
@@ -197,7 +277,8 @@ export default function AdminCompaniesPage() {
       location_state: [],
       location_region: [],
       size_range: [],
-      revenue: []
+      revenue: [],
+      visibility_tier: []
     });
   };
 
@@ -222,6 +303,15 @@ export default function AdminCompaniesPage() {
 
   const getActiveFiltersCount = () => {
     return Object.values(filters).reduce((count, filterArray) => count + filterArray.length, 0);
+  };
+
+  const getTierColor = (tier: SubscriptionTier) => {
+    switch (tier) {
+      case 'free': return 'text-green-600 bg-green-100';
+      case 'pro': return 'text-blue-600 bg-blue-100';
+      case 'enterprise': return 'text-purple-600 bg-purple-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
   };
 
   const tiers: SubscriptionTier[] = ['free', 'pro', 'enterprise'];
@@ -258,6 +348,61 @@ export default function AdminCompaniesPage() {
           </span>
         </div>
       </div>
+
+      {/* Bulk Actions */}
+      {selectedCompanies.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-blue-800 font-medium">
+              {selectedCompanies.length} compan{selectedCompanies.length !== 1 ? 'ies' : 'y'} selected
+            </span>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setShowVisibilityPanel(!showVisibilityPanel)}
+                className="flex items-center px-4 py-2 text-blue-700 bg-white border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                Manage Visibility
+                {showVisibilityPanel ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Bulk Visibility Panel */}
+          {showVisibilityPanel && (
+            <div className="mt-4 p-4 bg-white border border-blue-200 rounded-lg">
+              <h4 className="text-sm font-medium text-blue-900 mb-3">Bulk Visibility Management</h4>
+              <div className="flex items-center space-x-4">
+                <select
+                  value={bulkVisibilityTier}
+                  onChange={(e) => setBulkVisibilityTier(e.target.value as SubscriptionTier)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="free">Free Tier</option>
+                  <option value="pro">Pro Tier</option>
+                  <option value="enterprise">Enterprise Tier</option>
+                </select>
+                <button
+                  onClick={() => handleBulkVisibilityUpdate('add')}
+                  disabled={updating === 'bulk'}
+                  className="flex items-center px-4 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Grant Access
+                </button>
+                <button
+                  onClick={() => handleBulkVisibilityUpdate('remove')}
+                  disabled={updating === 'bulk'}
+                  className="flex items-center px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  <EyeOff className="w-4 h-4 mr-2" />
+                  Revoke Access
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Search and Controls */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
@@ -344,6 +489,26 @@ export default function AdminCompaniesPage() {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Visibility Tier Filter */}
+              <div>
+                <h5 className="text-sm font-medium text-gray-700 mb-2">Visibility Tier</h5>
+                <div className="space-y-2">
+                  {getUniqueVisibilityTiers().map((tier) => (
+                    <label key={tier} className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.visibility_tier.includes(tier)}
+                        onChange={(e) => handleFilterChange('visibility_tier', tier, e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${getTierColor(tier)}`}>
+                        {tier}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               {/* Company Type Filter */}
               <div>
                 <h5 className="text-sm font-medium text-gray-700 mb-2">Company Type</h5>
@@ -433,24 +598,6 @@ export default function AdminCompaniesPage() {
                   ))}
                 </div>
               </div>
-
-              {/* Revenue Filter */}
-              <div>
-                <h5 className="text-sm font-medium text-gray-700 mb-2">Revenue</h5>
-                <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {getUniqueValues('revenue').filter(revenue => revenue).map((revenue) => (
-                    <label key={revenue} className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={filters.revenue.includes(revenue as string)}
-                        onChange={(e) => handleFilterChange('revenue', revenue as string, e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-600">{revenue}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         )}
@@ -459,9 +606,17 @@ export default function AdminCompaniesPage() {
       {/* Results Summary */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-600">
-            Showing {filteredCompanies.length} of {companies.length} companies
-          </span>
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={selectedCompanies.length === filteredCompanies.length && filteredCompanies.length > 0}
+              onChange={handleSelectAll}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-600">
+              Showing {filteredCompanies.length} of {companies.length} companies
+            </span>
+          </div>
           {getActiveFiltersCount() > 0 && (
             <span className="text-sm text-blue-600">
               {getActiveFiltersCount()} filter{getActiveFiltersCount() !== 1 ? 's' : ''} applied
@@ -476,6 +631,14 @@ export default function AdminCompaniesPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                  <input
+                    type="checkbox"
+                    checked={selectedCompanies.length === filteredCompanies.length && filteredCompanies.length > 0}
+                    onChange={handleSelectAll}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[250px]">
                   Company
                 </th>
@@ -489,11 +652,6 @@ export default function AdminCompaniesPage() {
                     Industry
                   </th>
                 )}
-                {visibleFields.hq_location && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
-                    HQ Location
-                  </th>
-                )}
                 {visibleFields.location_city && (
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
                     City
@@ -504,34 +662,14 @@ export default function AdminCompaniesPage() {
                     State
                   </th>
                 )}
-                {visibleFields.location_region && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
-                    Region
-                  </th>
-                )}
                 {visibleFields.size_range && (
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
                     Size
                   </th>
                 )}
-                {visibleFields.revenue && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
-                    Revenue
-                  </th>
-                )}
-                {visibleFields.phone_number && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[140px]">
-                    Phone
-                  </th>
-                )}
                 {visibleFields.technologies_used && (
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">
                     Technologies
-                  </th>
-                )}
-                {visibleFields.created_at && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]">
-                    Created
                   </th>
                 )}
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">
@@ -542,6 +680,14 @@ export default function AdminCompaniesPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredCompanies.map((company) => (
                 <tr key={company.company_id} className="hover:bg-gray-50">
+                  <td className="px-4 py-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedCompanies.includes(company.company_id)}
+                      onChange={() => handleSelectCompany(company.company_id)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </td>
                   <td className="px-4 py-4">
                     <div className="flex items-center min-w-0">
                       <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
@@ -575,6 +721,17 @@ export default function AdminCompaniesPage() {
                             </a>
                           )}
                         </div>
+                        {/* Show current visibility tiers */}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {(company.visible_to_tiers || []).map((tier) => (
+                            <span
+                              key={tier}
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium capitalize ${getTierColor(tier)}`}
+                            >
+                              {tier}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -588,11 +745,6 @@ export default function AdminCompaniesPage() {
                       <div className="text-sm text-gray-900">{company.industry}</div>
                     </td>
                   )}
-                  {visibleFields.hq_location && (
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">{company.hq_location}</div>
-                    </td>
-                  )}
                   {visibleFields.location_city && (
                     <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{company.location_city}</div>
@@ -603,27 +755,12 @@ export default function AdminCompaniesPage() {
                       <div className="text-sm text-gray-900">{company.location_state}</div>
                     </td>
                   )}
-                  {visibleFields.location_region && (
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">{company.location_region}</div>
-                    </td>
-                  )}
                   {visibleFields.size_range && (
                     <td className="px-4 py-4">
                       <div className="text-sm text-gray-900">{company.size_range}</div>
                       {company.headcount && (
                         <div className="text-xs text-gray-500 mt-1">{company.headcount.toLocaleString()} employees</div>
                       )}
-                    </td>
-                  )}
-                  {visibleFields.revenue && (
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">{company.revenue || '-'}</div>
-                    </td>
-                  )}
-                  {visibleFields.phone_number && (
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">{company.phone_number || '-'}</div>
                     </td>
                   )}
                   {visibleFields.technologies_used && (
@@ -642,13 +779,6 @@ export default function AdminCompaniesPage() {
                             +{company.technologies_used.length - 2} more
                           </span>
                         )}
-                      </div>
-                    </td>
-                  )}
-                  {visibleFields.created_at && (
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-900">
-                        {new Date(company.created_at).toLocaleDateString()}
                       </div>
                     </td>
                   )}
@@ -678,11 +808,7 @@ export default function AdminCompaniesPage() {
                                 )}
                               </div>
                             </label>
-                            <span className={`text-xs font-medium capitalize ${
-                              tier === 'free' ? 'text-green-600' :
-                              tier === 'pro' ? 'text-blue-600' :
-                              'text-purple-600'
-                            }`}>
+                            <span className={`text-xs font-medium capitalize ${getTierColor(tier).split(' ')[0]}`}>
                               {tier}
                             </span>
                           </div>
@@ -710,28 +836,33 @@ export default function AdminCompaniesPage() {
         )}
       </div>
 
-      {/* Legend */}
+      {/* Enhanced Legend */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-blue-900 mb-2">Visibility Control</h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-blue-800">
+        <h4 className="text-sm font-medium text-blue-900 mb-2">Visibility Control & User Access Management</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-blue-800 mb-4">
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 bg-green-100 border border-green-300 rounded flex items-center justify-center">
               <CheckCircle className="w-2 h-2 text-green-600" />
             </div>
-            <span><strong>Free:</strong> Basic access users</span>
+            <span><strong>Free:</strong> Basic access users (50 credits/month)</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 bg-blue-100 border border-blue-300 rounded flex items-center justify-center">
               <CheckCircle className="w-2 h-2 text-blue-600" />
             </div>
-            <span><strong>Pro:</strong> Professional plan users</span>
+            <span><strong>Pro:</strong> Professional plan users (2,000 credits/month)</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 bg-purple-100 border border-purple-300 rounded flex items-center justify-center">
               <CheckCircle className="w-2 h-2 text-purple-600" />
             </div>
-            <span><strong>Enterprise:</strong> Enterprise plan users</span>
+            <span><strong>Enterprise:</strong> Enterprise plan users (10,000 credits/month)</span>
           </div>
+        </div>
+        <div className="text-xs text-blue-700 space-y-1">
+          <p><strong>Bulk Actions:</strong> Select multiple companies to manage visibility across subscription tiers simultaneously.</p>
+          <p><strong>Access Control:</strong> Companies are only visible to users whose subscription tier is included in the visibility settings.</p>
+          <p><strong>Real-time Updates:</strong> Visibility changes take effect immediately for all users.</p>
         </div>
       </div>
     </div>
