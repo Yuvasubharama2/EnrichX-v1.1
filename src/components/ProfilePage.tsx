@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Building2, Mail, Calendar, CreditCard, Shield, Edit3, Save, X, Check } from 'lucide-react';
+import { User, Building2, Mail, Calendar, Shield, Edit3, Save, X, Check } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
@@ -57,24 +57,6 @@ export default function ProfilePage() {
       month: 'long',
       day: 'numeric'
     });
-  };
-
-  const getDaysUntilBillingCycle = () => {
-    if (!user?.billing_cycle_end) return 0;
-    const now = new Date();
-    const cycleEnd = new Date(user.billing_cycle_end);
-    const diffTime = cycleEnd.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return Math.max(0, diffDays);
-  };
-
-  const getSubscriptionColor = (tier: string) => {
-    switch (tier) {
-      case 'enterprise': return 'from-purple-500 to-purple-600';
-      case 'pro': return 'from-blue-500 to-blue-600';
-      case 'free': return 'from-green-500 to-green-600';
-      default: return 'from-gray-500 to-gray-600';
-    }
   };
 
   if (!user) {
@@ -252,91 +234,13 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Subscription & Usage */}
+        {/* Account Summary */}
         <div className="space-y-6">
-          {/* Current Subscription */}
+          {/* Account Overview */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Subscription</h2>
-            
-            <div className={`p-4 bg-gradient-to-r ${getSubscriptionColor(user.subscription_tier)} rounded-lg text-white mb-4`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold capitalize">{user.subscription_tier} Plan</h3>
-                  <p className="text-sm opacity-90">
-                    {user.credits_monthly_limit.toLocaleString()} credits/month
-                  </p>
-                </div>
-                <CreditCard className="w-6 h-6" />
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600">Credits Used</span>
-                  <span className="font-medium">
-                    {(user.credits_monthly_limit - user.credits_remaining).toLocaleString()} / {user.credits_monthly_limit.toLocaleString()}
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className={`h-2 rounded-full bg-gradient-to-r ${getSubscriptionColor(user.subscription_tier)}`}
-                    style={{ 
-                      width: `${((user.credits_monthly_limit - user.credits_remaining) / user.credits_monthly_limit) * 100}%` 
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className="text-sm text-gray-600">
-                <p><strong>Billing Cycle:</strong></p>
-                <p>{formatDate(user.billing_cycle_start)} - {formatDate(user.billing_cycle_end)}</p>
-                <p className="mt-1 text-blue-600 font-medium">
-                  {getDaysUntilBillingCycle()} days until next cycle
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Export Usage */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Export Usage</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Account Overview</h2>
             
             <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600">Companies Exported</span>
-                  <span className="font-medium">{user.exports_this_month.companies}</span>
-                </div>
-                <div className="text-xs text-gray-500">
-                  Limit: {user.subscription_tier === 'free' ? '1,000' : 
-                          user.subscription_tier === 'pro' ? '5,000' : '20,000'} per month
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-gray-600">Contacts Exported</span>
-                  <span className="font-medium">{user.exports_this_month.contacts}</span>
-                </div>
-                <div className="text-xs text-gray-500">
-                  Limit: {user.subscription_tier === 'free' ? '50' : 
-                          user.subscription_tier === 'pro' ? '1,000' : '10,000'} per month
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Stats */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Quick Stats</h2>
-            
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Credits Remaining</span>
-                <span className="font-semibold text-blue-600">{user.credits_remaining.toLocaleString()}</span>
-              </div>
-              
               <div className="flex items-center justify-between">
                 <span className="text-gray-600">Account Type</span>
                 <span className="font-semibold capitalize">{user.subscription_tier}</span>
@@ -350,6 +254,87 @@ export default function ProfilePage() {
                 }`}>
                   {user.subscription_status}
                 </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">Role</span>
+                <span className="font-semibold capitalize">{user.role}</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">Company</span>
+                <span className="font-semibold">{user.company_name || 'Not specified'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Security Settings */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Security</h2>
+            
+            <div className="space-y-4">
+              <button className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div className="text-left">
+                  <h4 className="font-medium text-gray-900">Change Password</h4>
+                  <p className="text-sm text-gray-600">Update your account password</p>
+                </div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+              </button>
+
+              <button className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div className="text-left">
+                  <h4 className="font-medium text-gray-900">Two-Factor Authentication</h4>
+                  <p className="text-sm text-gray-600">Add an extra layer of security</p>
+                </div>
+                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              </button>
+
+              <button className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div className="text-left">
+                  <h4 className="font-medium text-gray-900">Login Sessions</h4>
+                  <p className="text-sm text-gray-600">Manage active sessions</p>
+                </div>
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              </button>
+            </div>
+          </div>
+
+          {/* Preferences */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Preferences</h2>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium text-gray-900">Email Notifications</h4>
+                  <p className="text-sm text-gray-600">Receive updates via email</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" defaultChecked />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium text-gray-900">Marketing Emails</h4>
+                  <p className="text-sm text-gray-600">Product updates and tips</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium text-gray-900">Data Export Alerts</h4>
+                  <p className="text-sm text-gray-600">Notify when exports complete</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" defaultChecked />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
               </div>
             </div>
           </div>

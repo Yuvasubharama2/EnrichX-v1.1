@@ -1,5 +1,5 @@
 import React from 'react';
-import { CreditCard, Download, Calendar, TrendingUp, Zap, Star, Check } from 'lucide-react';
+import { CreditCard, Download, Calendar, TrendingUp, Zap, Star, Check, Building2, Users, BarChart3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { SubscriptionPlan } from '../types';
 
@@ -59,6 +59,46 @@ export default function BillingPage() {
     { month: 'May', credits: 350 },
   ];
 
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const getDaysUntilBillingCycle = () => {
+    if (!user?.billing_cycle_end) return 0;
+    const now = new Date();
+    const cycleEnd = new Date(user.billing_cycle_end);
+    const diffTime = cycleEnd.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(0, diffDays);
+  };
+
+  const getSubscriptionColor = (tier: string) => {
+    switch (tier) {
+      case 'enterprise': return 'from-purple-500 to-purple-600';
+      case 'pro': return 'from-blue-500 to-blue-600';
+      case 'free': return 'from-green-500 to-green-600';
+      default: return 'from-gray-500 to-gray-600';
+    }
+  };
+
+  const getExportLimits = () => {
+    switch (user?.subscription_tier) {
+      case 'enterprise':
+        return { companies: 20000, contacts: 10000 };
+      case 'pro':
+        return { companies: 5000, contacts: 1000 };
+      case 'free':
+      default:
+        return { companies: 1000, contacts: 50 };
+    }
+  };
+
+  const exportLimits = getExportLimits();
+
   return (
     <div className="max-w-6xl mx-auto p-6">
       {/* Header */}
@@ -67,13 +107,13 @@ export default function BillingPage() {
         <p className="text-gray-600">Manage your subscription and monitor usage</p>
       </div>
 
-      {/* Current Plan & Usage */}
+      {/* Current Plan & Usage Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {/* Current Plan */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Current Plan</h3>
-            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium capitalize">
+            <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize bg-gradient-to-r ${getSubscriptionColor(user?.subscription_tier || 'free')} text-white`}>
               {user?.subscription_tier}
             </span>
           </div>
@@ -84,11 +124,18 @@ export default function BillingPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Status</span>
-              <span className="text-green-600 font-medium capitalize">{user?.subscription_status}</span>
+              <span className={`font-medium capitalize ${
+                user?.subscription_status === 'active' ? 'text-green-600' : 
+                user?.subscription_status === 'past_due' ? 'text-yellow-600' : 'text-red-600'
+              }`}>
+                {user?.subscription_status}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Next Billing</span>
-              <span className="font-medium">Feb 15, 2024</span>
+              <span className="font-medium">
+                {user?.billing_cycle_end ? formatDate(new Date(user.billing_cycle_end)) : 'N/A'}
+              </span>
             </div>
           </div>
         </div>
@@ -109,7 +156,7 @@ export default function BillingPage() {
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
-                  className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full"
+                  className={`h-2 rounded-full bg-gradient-to-r ${getSubscriptionColor(user?.subscription_tier || 'free')}`}
                   style={{ 
                     width: `${(((user?.credits_monthly_limit || 0) - (user?.credits_remaining || 0)) / (user?.credits_monthly_limit || 1)) * 100}%` 
                   }}
@@ -117,7 +164,7 @@ export default function BillingPage() {
               </div>
             </div>
             <div className="text-sm text-gray-600">
-              Resets on the 15th of each month
+              Resets on the {user?.billing_cycle_end ? new Date(user.billing_cycle_end).getDate() : 15}th of each month
             </div>
           </div>
         </div>
@@ -142,6 +189,77 @@ export default function BillingPage() {
         </div>
       </div>
 
+      {/* Export Usage */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Companies Export Usage */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Building2 className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Companies Exported</h3>
+                <p className="text-sm text-gray-600">This month</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-blue-600">
+                {user?.exports_this_month?.companies?.toLocaleString() || '0'}
+              </div>
+              <div className="text-sm text-gray-500">
+                of {exportLimits.companies.toLocaleString()}
+              </div>
+            </div>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              style={{ 
+                width: `${Math.min(((user?.exports_this_month?.companies || 0) / exportLimits.companies) * 100, 100)}%` 
+              }}
+            />
+          </div>
+          <div className="mt-2 text-xs text-gray-500">
+            {(((user?.exports_this_month?.companies || 0) / exportLimits.companies) * 100).toFixed(1)}% of monthly limit used
+          </div>
+        </div>
+
+        {/* Contacts Export Usage */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Users className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Contacts Exported</h3>
+                <p className="text-sm text-gray-600">This month</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-purple-600">
+                {user?.exports_this_month?.contacts?.toLocaleString() || '0'}
+              </div>
+              <div className="text-sm text-gray-500">
+                of {exportLimits.contacts.toLocaleString()}
+              </div>
+            </div>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+              style={{ 
+                width: `${Math.min(((user?.exports_this_month?.contacts || 0) / exportLimits.contacts) * 100, 100)}%` 
+              }}
+            />
+          </div>
+          <div className="mt-2 text-xs text-gray-500">
+            {(((user?.exports_this_month?.contacts || 0) / exportLimits.contacts) * 100).toFixed(1)}% of monthly limit used
+          </div>
+        </div>
+      </div>
+
       {/* Usage Chart */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
         <h3 className="text-lg font-semibold text-gray-900 mb-6">Usage History</h3>
@@ -156,6 +274,44 @@ export default function BillingPage() {
               <div className="text-xs text-gray-500">{data.credits}</div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+        <h3 className="text-lg font-semibold text-gray-900 mb-6">Quick Stats</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-600 mb-2">
+              {user?.credits_remaining?.toLocaleString() || '0'}
+            </div>
+            <div className="text-sm text-gray-600">Credits Remaining</div>
+          </div>
+          
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-600 mb-2 capitalize">
+              {user?.subscription_tier || 'Free'}
+            </div>
+            <div className="text-sm text-gray-600">Current Plan</div>
+          </div>
+          
+          <div className="text-center">
+            <div className={`text-2xl font-bold mb-2 capitalize ${
+              user?.subscription_status === 'active' ? 'text-green-600' : 
+              user?.subscription_status === 'past_due' ? 'text-yellow-600' : 'text-red-600'
+            }`}>
+              {user?.subscription_status || 'Unknown'}
+            </div>
+            <div className="text-sm text-gray-600">Account Status</div>
+          </div>
+          
+          <div className="text-center">
+            <div className="text-2xl font-bold text-purple-600 mb-2">
+              {getDaysUntilBillingCycle()}
+            </div>
+            <div className="text-sm text-gray-600">Days Until Renewal</div>
+          </div>
         </div>
       </div>
 
