@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Building2, Users, Search, Download, Trash2, Calendar, Mail, Phone, Globe, Linkedin, MapPin, Star, Filter, X } from 'lucide-react';
+import { Heart, Building2, Users, Search, Download, Trash2, Calendar, Mail, Phone, Globe, Linkedin, MapPin, Star, Filter, X, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
@@ -17,7 +17,7 @@ interface FavoriteItem {
 }
 
 export default function FavoritesPage() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'companies' | 'contacts'>('companies');
   const [favoriteCompanies, setFavoriteCompanies] = useState<string[]>([]);
   const [favoriteContacts, setFavoriteContacts] = useState<string[]>([]);
@@ -25,14 +25,16 @@ export default function FavoritesPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [revealedEmails, setRevealedEmails] = useState<string[]>([]);
 
   useEffect(() => {
     loadFavorites();
     fetchData();
+    loadRevealedEmails();
   }, [user]);
 
   const loadFavorites = () => {
-    // Load favorites from localStorage
+    // Load favorites from localStorage with real-time sync
     const savedCompanyFavorites = localStorage.getItem(`favorites_${user?.id}`);
     const savedContactFavorites = localStorage.getItem(`contact_favorites_${user?.id}`);
     
@@ -42,6 +44,80 @@ export default function FavoritesPage() {
     
     if (savedContactFavorites) {
       setFavoriteContacts(JSON.parse(savedContactFavorites));
+    }
+
+    // Set up real-time sync for favorites
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `favorites_${user?.id}` && e.newValue) {
+        setFavoriteCompanies(JSON.parse(e.newValue));
+      }
+      if (e.key === `contact_favorites_${user?.id}` && e.newValue) {
+        setFavoriteContacts(JSON.parse(e.newValue));
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  };
+
+  const loadRevealedEmails = () => {
+    // Load revealed emails from localStorage with real-time sync
+    const saved = localStorage.getItem(`revealed_emails_${user?.id}`);
+    if (saved) {
+      setRevealedEmails(JSON.parse(saved));
+    }
+
+    // Set up real-time sync for revealed emails
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `revealed_emails_${user?.id}` && e.newValue) {
+        setRevealedEmails(JSON.parse(e.newValue));
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  };
+
+  const handleRevealEmail = async (contactId: string) => {
+    if (revealedEmails.includes(contactId)) {
+      return; // Already revealed
+    }
+
+    if (!user || user.credits_remaining <= 0) {
+      alert('Insufficient credits to reveal email');
+      return;
+    }
+
+    try {
+      // Deduct 1 credit from user
+      const newCredits = user.credits_remaining - 1;
+      
+      // Update user metadata in Supabase
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          ...user,
+          credits_remaining: newCredits
+        }
+      });
+
+      if (error) throw error;
+
+      // Add to revealed emails
+      const newRevealed = [...revealedEmails, contactId];
+      localStorage.setItem(`revealed_emails_${user?.id}`, JSON.stringify(newRevealed));
+      setRevealedEmails(newRevealed);
+
+      // Update user context
+      updateUser({ credits_remaining: newCredits });
+
+      // Trigger storage event for real-time sync across tabs
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: `revealed_emails_${user?.id}`,
+        newValue: JSON.stringify(newRevealed)
+      }));
+    } catch (error) {
+      console.error('Error revealing email:', error);
+      alert('Failed to reveal email');
     }
   };
 
@@ -81,10 +157,22 @@ export default function FavoritesPage() {
       const newFavorites = favoriteCompanies.filter(fav => fav !== id);
       localStorage.setItem(`favorites_${user?.id}`, JSON.stringify(newFavorites));
       setFavoriteCompanies(newFavorites);
+      
+      // Trigger storage event for real-time sync
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: `favorites_${user?.id}`,
+        newValue: JSON.stringify(newFavorites)
+      }));
     } else {
       const newFavorites = favoriteContacts.filter(fav => fav !== id);
       localStorage.setItem(`contact_favorites_${user?.id}`, JSON.stringify(newFavorites));
       setFavoriteContacts(newFavorites);
+      
+      // Trigger storage event for real-time sync
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: `contact_favorites_${user?.id}`,
+        newValue: JSON.stringify(newFavorites)
+      }));
     }
   };
 
@@ -93,9 +181,21 @@ export default function FavoritesPage() {
       if (type === 'company') {
         localStorage.setItem(`favorites_${user?.id}`, JSON.stringify([]));
         setFavoriteCompanies([]);
+        
+        // Trigger storage event for real-time sync
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: `favorites_${user?.id}`,
+          newValue: JSON.stringify([])
+        }));
       } else {
         localStorage.setItem(`contact_favorites_${user?.id}`, JSON.stringify([]));
         setFavoriteContacts([]);
+        
+        // Trigger storage event for real-time sync
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: `contact_favorites_${user?.id}`,
+          newValue: JSON.stringify([])
+        }));
       }
     }
   };
@@ -128,7 +228,7 @@ export default function FavoritesPage() {
           contact.name,
           contact.job_title,
           contact.company?.company_name || '',
-          contact.email || '',
+          revealedEmails.includes(contact.contact_id) ? (contact.email || '') : '',
           contact.phone_number || '',
           contact.location_city,
           contact.location_state,
@@ -180,7 +280,7 @@ export default function FavoritesPage() {
       !searchQuery || 
       contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       contact.job_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      contact.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (revealedEmails.includes(contact.contact_id) && contact.email?.toLowerCase().includes(searchQuery.toLowerCase())) ||
       contact.company?.company_name?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
@@ -495,13 +595,33 @@ export default function FavoritesPage() {
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                             {contact.email && (
-                              <div className="flex items-center text-gray-700">
-                                <Mail className="w-4 h-4 mr-2 text-gray-400" />
-                                <span className="truncate">{contact.email}</span>
-                                {contact.email_score && (
-                                  <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                                    {contact.email_score}%
-                                  </span>
+                              <div className="space-y-1">
+                                {revealedEmails.includes(contact.contact_id) ? (
+                                  <div className="flex items-center text-gray-700">
+                                    <Mail className="w-4 h-4 mr-2 text-gray-400" />
+                                    <span className="truncate">{contact.email}</span>
+                                    {contact.email_score && (
+                                      <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
+                                        {contact.email_score}%
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center space-x-2">
+                                    <div className="flex items-center text-gray-500">
+                                      <Mail className="w-4 h-4 mr-2 text-gray-400" />
+                                      <span>••••••@••••••.com</span>
+                                    </div>
+                                    <button
+                                      onClick={() => handleRevealEmail(contact.contact_id)}
+                                      disabled={user?.credits_remaining === 0}
+                                      className="flex items-center px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title={user?.credits_remaining === 0 ? 'No credits remaining' : 'Reveal email (1 credit)'}
+                                    >
+                                      <Eye className="w-3 h-3 mr-1" />
+                                      Reveal (1 credit)
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             )}

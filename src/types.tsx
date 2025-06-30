@@ -9,6 +9,13 @@ export interface User {
   subscription_status: 'active' | 'canceled' | 'past_due';
   created_at: Date;
   last_login: Date;
+  billing_cycle_start: Date;
+  billing_cycle_end: Date;
+  exports_this_month: {
+    companies: number;
+    contacts: number;
+  };
+  company_name: string;
 }
 
 // New types for CSV Upload
@@ -37,4 +44,24 @@ export interface UploadResult {
 
 export interface CSVMapping {
   [key: string]: string; // Maps field names to column indices
+}
+
+export interface ExportHistory {
+  id: string;
+  user_id: string;
+  type: 'companies' | 'contacts';
+  count: number;
+  filename: string;
+  exported_at: Date;
+  filters_applied?: string;
+}
+
+export interface SavedList {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string;
+  contact_count: number;
+  created_at: Date;
+  updated_at: Date;
 }

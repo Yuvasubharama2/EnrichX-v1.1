@@ -7,6 +7,7 @@ interface AuthContextType {
   login: (email: string, password: string, signupData?: { subscriptionTier: string; name: string; companyName: string }) => Promise<any>;
   logout: () => Promise<void>;
   isLoading: boolean;
+  updateUser: (userData: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -144,6 +145,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const role = isAdmin ? 'admin' : (metadata.role || 'subscriber');
     const tier = isAdmin ? 'enterprise' : (metadata.subscription_tier || 'free');
     
+    // Initialize billing cycle if not exists
+    const now = new Date();
+    const billingCycleStart = metadata.billing_cycle_start ? new Date(metadata.billing_cycle_start) : now;
+    const billingCycleEnd = metadata.billing_cycle_end ? new Date(metadata.billing_cycle_end) : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+    
     return {
       id: supabaseUser.id,
       email: supabaseUser.email,
@@ -154,7 +160,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       credits_monthly_limit: getDefaultCredits(tier),
       subscription_status: metadata.subscription_status || 'active',
       created_at: new Date(supabaseUser.created_at),
-      last_login: new Date()
+      last_login: new Date(),
+      billing_cycle_start: billingCycleStart,
+      billing_cycle_end: billingCycleEnd,
+      exports_this_month: metadata.exports_this_month || { companies: 0, contacts: 0 },
+      company_name: metadata.company_name || ''
     };
   };
 
@@ -167,6 +177,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateUser = (userData: Partial<User>) => {
+    setUser(prev => prev ? { ...prev, ...userData } : null);
+  };
+
   const login = async (email: string, password: string, signupData?: { subscriptionTier: string; name: string; companyName: string }) => {
     setIsLoading(true);
     
@@ -175,6 +189,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (signupData) {
         const role = email === 'admin@enrichx.com' ? 'admin' : 'subscriber';
         const tier = email === 'admin@enrichx.com' ? 'enterprise' : signupData.subscriptionTier;
+        
+        // Initialize billing cycle for new users
+        const now = new Date();
+        const billingCycleStart = now;
+        const billingCycleEnd = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
         
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
@@ -186,7 +205,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               role,
               subscription_tier: tier,
               credits_remaining: getDefaultCredits(tier),
-              subscription_status: 'active'
+              subscription_status: 'active',
+              billing_cycle_start: billingCycleStart.toISOString(),
+              billing_cycle_end: billingCycleEnd.toISOString(),
+              exports_this_month: { companies: 0, contacts: 0 }
             }
           }
         });
@@ -257,7 +279,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, logout, isLoading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

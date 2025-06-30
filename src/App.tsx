@@ -14,6 +14,8 @@ import UserCompaniesPage from './components/UserCompaniesPage';
 import SavedLists from './components/SavedLists';
 import FavoritesPage from './components/FavoritesPage';
 import BillingPage from './components/BillingPage';
+import ProfilePage from './components/ProfilePage';
+import ExportHistoryPage from './components/ExportHistoryPage';
 import LandingPage from './components/LandingPage';
 
 function AdminApp() {
@@ -80,23 +82,9 @@ function UserApp() {
       case 'favorites':
         return <FavoritesPage />;
       case 'exports':
-        return (
-          <div className="max-w-4xl mx-auto p-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Export History</h3>
-              <p className="text-gray-600">Your export history will appear here...</p>
-            </div>
-          </div>
-        );
+        return <ExportHistoryPage />;
       case 'profile':
-        return (
-          <div className="max-w-4xl mx-auto p-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Profile Settings</h3>
-              <p className="text-gray-600">Profile management coming soon...</p>
-            </div>
-          </div>
-        );
+        return <ProfilePage />;
       case 'billing':
         return <BillingPage />;
       case 'settings':
