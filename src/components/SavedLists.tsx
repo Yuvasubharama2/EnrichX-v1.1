@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Trash2, Download, Users, Calendar, Edit3, Building2, Star, Check, X, Eye, ArrowLeft } from 'lucide-react';
+import { Plus, Search, Trash2, Download, Users, Calendar, Edit3, Building2, Star, Check, X, Eye, ArrowLeft, Mail } from 'lucide-react';
 import { SavedList } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 interface SavedListWithItems extends SavedList {
   companies?: any[];
@@ -9,7 +10,7 @@ interface SavedListWithItems extends SavedList {
 }
 
 export default function SavedLists() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'companies' | 'contacts'>('companies');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -19,13 +20,15 @@ export default function SavedLists() {
   const [newListDescription, setNewListDescription] = useState('');
   const [companyLists, setCompanyLists] = useState<SavedListWithItems[]>([]);
   const [contactLists, setContactLists] = useState<SavedListWithItems[]>([]);
+  const [revealedEmails, setRevealedEmails] = useState<string[]>([]);
 
   useEffect(() => {
     loadLists();
+    loadRevealedEmails();
   }, [user]);
 
   const loadLists = () => {
-    // Load company lists from localStorage
+    // Load company lists from localStorage with real-time sync
     const savedCompanyLists = localStorage.getItem(`company_lists_${user?.id}`);
     if (savedCompanyLists) {
       const parsedLists = JSON.parse(savedCompanyLists).map((list: any) => ({
@@ -36,7 +39,7 @@ export default function SavedLists() {
       setCompanyLists(parsedLists);
     }
 
-    // Load contact lists from localStorage
+    // Load contact lists from localStorage with real-time sync
     const savedContactLists = localStorage.getItem(`contact_lists_${user?.id}`);
     if (savedContactLists) {
       const parsedLists = JSON.parse(savedContactLists).map((list: any) => ({
@@ -46,16 +49,112 @@ export default function SavedLists() {
       }));
       setContactLists(parsedLists);
     }
+
+    // Set up real-time sync for saved lists
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `company_lists_${user?.id}` && e.newValue) {
+        const parsedLists = JSON.parse(e.newValue).map((list: any) => ({
+          ...list,
+          created_at: new Date(list.created_at),
+          updated_at: new Date(list.updated_at)
+        }));
+        setCompanyLists(parsedLists);
+      }
+      if (e.key === `contact_lists_${user?.id}` && e.newValue) {
+        const parsedLists = JSON.parse(e.newValue).map((list: any) => ({
+          ...list,
+          created_at: new Date(list.created_at),
+          updated_at: new Date(list.updated_at)
+        }));
+        setContactLists(parsedLists);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  };
+
+  const loadRevealedEmails = () => {
+    // Load revealed emails from localStorage with real-time sync
+    const saved = localStorage.getItem(`revealed_emails_${user?.id}`);
+    if (saved) {
+      setRevealedEmails(JSON.parse(saved));
+    }
+
+    // Set up real-time sync for revealed emails
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `revealed_emails_${user?.id}` && e.newValue) {
+        setRevealedEmails(JSON.parse(e.newValue));
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  };
+
+  const handleRevealEmail = async (contactId: string) => {
+    if (revealedEmails.includes(contactId)) {
+      return; // Already revealed
+    }
+
+    if (!user || user.credits_remaining <= 0) {
+      alert('Insufficient credits to reveal email');
+      return;
+    }
+
+    try {
+      // Deduct 1 credit from user
+      const newCredits = user.credits_remaining - 1;
+      
+      // Update user metadata in Supabase
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          ...user,
+          credits_remaining: newCredits
+        }
+      });
+
+      if (error) throw error;
+
+      // Add to revealed emails
+      const newRevealed = [...revealedEmails, contactId];
+      localStorage.setItem(`revealed_emails_${user?.id}`, JSON.stringify(newRevealed));
+      setRevealedEmails(newRevealed);
+
+      // Update user context
+      updateUser({ credits_remaining: newCredits });
+
+      // Trigger storage event for real-time sync across tabs
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: `revealed_emails_${user?.id}`,
+        newValue: JSON.stringify(newRevealed)
+      }));
+    } catch (error) {
+      console.error('Error revealing email:', error);
+      alert('Failed to reveal email');
+    }
   };
 
   const saveCompanyLists = (newLists: SavedListWithItems[]) => {
     localStorage.setItem(`company_lists_${user?.id}`, JSON.stringify(newLists));
     setCompanyLists(newLists);
+    
+    // Trigger storage event for real-time sync
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: `company_lists_${user?.id}`,
+      newValue: JSON.stringify(newLists)
+    }));
   };
 
   const saveContactLists = (newLists: SavedListWithItems[]) => {
     localStorage.setItem(`contact_lists_${user?.id}`, JSON.stringify(newLists));
     setContactLists(newLists);
+    
+    // Trigger storage event for real-time sync
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: `contact_lists_${user?.id}`,
+      newValue: JSON.stringify(newLists)
+    }));
   };
 
   const handleCreateList = () => {
@@ -155,7 +254,8 @@ export default function SavedLists() {
           contact.name,
           contact.job_title,
           contact.company_name || '',
-          contact.email || '',
+          // Only include email if it's been revealed
+          revealedEmails.includes(contact.contact_id) ? (contact.email || '') : '',
           contact.phone_number || '',
           new Date(contact.added_at || Date.now()).toLocaleDateString()
         ].map(field => `"${field}"`).join(','))
@@ -303,7 +403,36 @@ export default function SavedLists() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{contact.job_title}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{contact.company_name}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{contact.email || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {contact.email ? (
+                          <div className="space-y-1">
+                            {revealedEmails.includes(contact.contact_id) ? (
+                              <div className="flex items-center text-sm text-gray-700">
+                                <Mail className="w-4 h-4 mr-2 text-gray-400" />
+                                <span>{contact.email}</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center space-x-2">
+                                <div className="flex items-center text-sm text-gray-500">
+                                  <Mail className="w-4 h-4 mr-2 text-gray-400" />
+                                  <span>••••••@••••••.com</span>
+                                </div>
+                                <button
+                                  onClick={() => handleRevealEmail(contact.contact_id)}
+                                  disabled={user?.credits_remaining === 0}
+                                  className="flex items-center px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={user?.credits_remaining === 0 ? 'No credits remaining' : 'Reveal email (1 credit)'}
+                                >
+                                  <Eye className="w-3 h-3 mr-1" />
+                                  Reveal (1 credit)
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-500">-</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{contact.phone_number || '-'}</td>
                     </tr>
                   ))}
