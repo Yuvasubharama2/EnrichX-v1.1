@@ -37,7 +37,7 @@ interface VisibleFields {
 }
 
 export default function UserDashboard() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,6 +112,8 @@ export default function UserDashboard() {
     if (!user) return;
 
     try {
+      console.log('Fetching contacts for user tier:', user.subscription_tier);
+      
       const { data, error } = await supabase
         .from('contacts')
         .select(`
@@ -121,7 +123,19 @@ export default function UserDashboard() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setContacts(data || []);
+      
+      console.log('Raw contacts fetched:', data?.length || 0);
+      
+      // Filter contacts based on user's subscription tier
+      const filteredData = (data || []).filter(contact => {
+        const visibleTiers = contact.visible_to_tiers || [];
+        const hasAccess = visibleTiers.includes(user.subscription_tier);
+        console.log(`Contact ${contact.name}: visible_to_tiers=${visibleTiers}, user_tier=${user.subscription_tier}, hasAccess=${hasAccess}`);
+        return hasAccess;
+      });
+      
+      console.log('Filtered contacts for user:', filteredData.length);
+      setContacts(filteredData);
     } catch (error) {
       console.error('Error fetching contacts:', error);
     } finally {
@@ -130,29 +144,61 @@ export default function UserDashboard() {
   };
 
   const loadFavorites = () => {
-    // Load favorites from localStorage for now
+    // Load favorites from localStorage with real-time sync
     const saved = localStorage.getItem(`contact_favorites_${user?.id}`);
     if (saved) {
       setFavoriteContacts(JSON.parse(saved));
     }
+
+    // Set up real-time sync for favorites
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `contact_favorites_${user?.id}` && e.newValue) {
+        setFavoriteContacts(JSON.parse(e.newValue));
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   };
 
   const loadRevealedEmails = () => {
-    // Load revealed emails from localStorage
+    // Load revealed emails from localStorage with real-time sync
     const saved = localStorage.getItem(`revealed_emails_${user?.id}`);
     if (saved) {
       setRevealedEmails(JSON.parse(saved));
     }
+
+    // Set up real-time sync for revealed emails
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `revealed_emails_${user?.id}` && e.newValue) {
+        setRevealedEmails(JSON.parse(e.newValue));
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   };
 
   const saveFavorites = (favorites: string[]) => {
     localStorage.setItem(`contact_favorites_${user?.id}`, JSON.stringify(favorites));
     setFavoriteContacts(favorites);
+    
+    // Trigger storage event for real-time sync
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: `contact_favorites_${user?.id}`,
+      newValue: JSON.stringify(favorites)
+    }));
   };
 
   const saveRevealedEmails = (revealed: string[]) => {
     localStorage.setItem(`revealed_emails_${user?.id}`, JSON.stringify(revealed));
     setRevealedEmails(revealed);
+    
+    // Trigger storage event for real-time sync
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: `revealed_emails_${user?.id}`,
+      newValue: JSON.stringify(revealed)
+    }));
   };
 
   const applyFilters = () => {
@@ -163,7 +209,7 @@ export default function UserDashboard() {
       filtered = filtered.filter(contact =>
         contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         contact.job_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        contact.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (revealedEmails.includes(contact.contact_id) && contact.email?.toLowerCase().includes(searchQuery.toLowerCase())) ||
         contact.company?.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         contact.location_city.toLowerCase().includes(searchQuery.toLowerCase()) ||
         contact.location_state.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -268,8 +314,10 @@ export default function UserDashboard() {
       const newRevealed = [...revealedEmails, contactId];
       saveRevealedEmails(newRevealed);
 
-      // Update user context would happen automatically through auth state change
-      window.location.reload(); // Simple way to refresh user data
+      // Update user context
+      updateUser({ credits_remaining: newCredits });
+
+      console.log('Email revealed successfully, credits deducted');
     } catch (error) {
       console.error('Error revealing email:', error);
       alert('Failed to reveal email');
@@ -393,6 +441,12 @@ export default function UserDashboard() {
     // Save to localStorage
     localStorage.setItem(`contact_lists_${user?.id}`, JSON.stringify(updatedLists));
     
+    // Trigger storage event for real-time sync
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: `contact_lists_${user?.id}`,
+      newValue: JSON.stringify(updatedLists)
+    }));
+    
     // Show success message
     alert(`Successfully saved ${selectedContacts.length} contacts to "${newListName}"`);
     
@@ -415,7 +469,7 @@ export default function UserDashboard() {
         contact.name,
         contact.job_title,
         contact.company?.company_name || '',
-        contact.email || '',
+        revealedEmails.includes(contact.contact_id) ? (contact.email || '') : '',
         contact.phone_number || '',
         contact.location_city,
         contact.location_state,
@@ -458,6 +512,15 @@ export default function UserDashboard() {
                 {user?.credits_remaining}/{user?.credits_monthly_limit}
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* Credit Usage Info */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center space-x-2">
+            <Mail className="w-5 h-5 text-blue-600" />
+            <span className="text-sm font-medium text-blue-900">Email Reveal Cost:</span>
+            <span className="text-sm text-blue-800">1 email = 1 credit</span>
           </div>
         </div>
 
@@ -858,10 +921,10 @@ export default function UserDashboard() {
                                   onClick={() => handleRevealEmail(contact.contact_id)}
                                   disabled={user?.credits_remaining === 0}
                                   className="flex items-center px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title={user?.credits_remaining === 0 ? 'No credits remaining' : 'Reveal email (1 credit)'}
+                                  title={user?.credits_remaining === 0 ? 'No credits remaining' : 'Reveal email'}
                                 >
                                   <Eye className="w-3 h-3 mr-1" />
-                                  Reveal (1 credit)
+                                  Reveal
                                 </button>
                               </div>
                             )}

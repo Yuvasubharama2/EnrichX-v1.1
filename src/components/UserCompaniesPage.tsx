@@ -98,13 +98,27 @@ export default function UserCompaniesPage() {
     if (!user) return;
 
     try {
+      console.log('Fetching companies for user tier:', user.subscription_tier);
+      
       const { data, error } = await supabase
         .from('companies')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setCompanies(data || []);
+      
+      console.log('Raw companies fetched:', data?.length || 0);
+      
+      // Filter companies based on user's subscription tier
+      const filteredData = (data || []).filter(company => {
+        const visibleTiers = company.visible_to_tiers || [];
+        const hasAccess = visibleTiers.includes(user.subscription_tier);
+        console.log(`Company ${company.company_name}: visible_to_tiers=${visibleTiers}, user_tier=${user.subscription_tier}, hasAccess=${hasAccess}`);
+        return hasAccess;
+      });
+      
+      console.log('Filtered companies for user:', filteredData.length);
+      setCompanies(filteredData);
     } catch (error) {
       console.error('Error fetching companies:', error);
     } finally {
@@ -113,16 +127,32 @@ export default function UserCompaniesPage() {
   };
 
   const loadFavorites = () => {
-    // Load favorites from localStorage for now
+    // Load favorites from localStorage with real-time sync
     const saved = localStorage.getItem(`favorites_${user?.id}`);
     if (saved) {
       setFavoriteCompanies(JSON.parse(saved));
     }
+
+    // Set up real-time sync for favorites
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `favorites_${user?.id}` && e.newValue) {
+        setFavoriteCompanies(JSON.parse(e.newValue));
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   };
 
   const saveFavorites = (favorites: string[]) => {
     localStorage.setItem(`favorites_${user?.id}`, JSON.stringify(favorites));
     setFavoriteCompanies(favorites);
+    
+    // Trigger storage event for real-time sync
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: `favorites_${user?.id}`,
+      newValue: JSON.stringify(favorites)
+    }));
   };
 
   const applyFilters = () => {
@@ -267,6 +297,12 @@ export default function UserCompaniesPage() {
     
     // Save to localStorage
     localStorage.setItem(`company_lists_${user?.id}`, JSON.stringify(updatedLists));
+    
+    // Trigger storage event for real-time sync
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: `company_lists_${user?.id}`,
+      newValue: JSON.stringify(updatedLists)
+    }));
     
     // Show success message
     alert(`Successfully saved ${selectedCompanies.length} companies to "${newListName}"`);
