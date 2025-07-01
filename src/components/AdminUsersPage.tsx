@@ -61,17 +61,38 @@ export default function AdminUsersPage() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      console.log('Fetching users from Supabase...');
+      console.log('Fetching users via Edge Function...');
       
-      // Get all users using the admin client
-      const { data: authUsers, error } = await supabase.auth.admin.listUsers();
+      // Get the current user's session
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (error) {
-        console.error('Error fetching users:', error);
-        throw error;
+      if (!session) {
+        throw new Error('No active session');
       }
 
-      console.log('Raw auth users:', authUsers);
+      // Call the admin-users Edge Function
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`;
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Edge Function error:', errorText);
+        throw new Error(`Failed to fetch users: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Edge Function response:', result);
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
 
       const getDefaultCredits = (tier: string) => {
         switch (tier) {
@@ -82,7 +103,7 @@ export default function AdminUsersPage() {
         }
       };
 
-      const userData: UserData[] = authUsers.users.map(user => {
+      const userData: UserData[] = result.users.map((user: any) => {
         const metadata = user.user_metadata || {};
         const isAdminUser = user.email === 'admin@enrichx.com';
         
@@ -105,10 +126,9 @@ export default function AdminUsersPage() {
       setUsers(userData);
     } catch (error) {
       console.error('Error fetching users:', error);
-      // Try alternative method using RPC or direct query
+      // Fallback to current user only if Edge Function fails
       try {
-        console.log('Trying alternative method...');
-        // For now, create mock data based on current session
+        console.log('Trying fallback method...');
         const { data: { user: currentUser } } = await supabase.auth.getUser();
         if (currentUser) {
           const mockUsers: UserData[] = [
