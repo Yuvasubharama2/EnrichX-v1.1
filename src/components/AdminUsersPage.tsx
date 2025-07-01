@@ -64,27 +64,47 @@ export default function AdminUsersPage() {
       console.log('Fetching users via Edge Function...');
       
       // Get the current user's session
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       
-      if (!session) {
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        throw new Error(`Session error: ${sessionError.message}`);
+      }
+      
+      if (!sessionData?.session) {
         throw new Error('No active session');
       }
 
-      // Call the admin-users Edge Function
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`;
+      // Validate environment variables
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl) {
+        throw new Error('VITE_SUPABASE_URL environment variable is not set');
+      }
+
+      // Construct the Edge Function URL properly
+      const baseUrl = supabaseUrl.endsWith('/') ? supabaseUrl.slice(0, -1) : supabaseUrl;
+      const apiUrl = `${baseUrl}/functions/v1/admin-users`;
       
+      console.log('Edge Function URL:', apiUrl);
+      console.log('Using access token:', sessionData.session.access_token ? 'Present' : 'Missing');
+
+      // Call the admin-users Edge Function
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
           'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
         },
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Edge Function error:', errorText);
-        throw new Error(`Failed to fetch users: ${response.status} ${response.statusText}`);
+        console.error('Edge Function error response:', errorText);
+        throw new Error(`Edge Function failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const result = await response.json();
@@ -126,10 +146,17 @@ export default function AdminUsersPage() {
       setUsers(userData);
     } catch (error) {
       console.error('Error fetching users:', error);
-      // Fallback to current user only if Edge Function fails
+      
+      // Enhanced fallback with better error handling
       try {
         console.log('Trying fallback method...');
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+        
+        if (userError) {
+          console.error('Fallback user fetch error:', userError);
+          throw userError;
+        }
+        
         if (currentUser) {
           const mockUsers: UserData[] = [
             {
@@ -147,9 +174,16 @@ export default function AdminUsersPage() {
             }
           ];
           setUsers(mockUsers);
+          console.log('Using fallback data with current user');
+        } else {
+          throw new Error('No current user found in fallback');
         }
       } catch (fallbackError) {
         console.error('Fallback method also failed:', fallbackError);
+        // Set empty array to prevent infinite loading
+        setUsers([]);
+        // Show user-friendly error message
+        alert(`Failed to load users: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your connection and try again.`);
       }
     } finally {
       setLoading(false);
@@ -234,7 +268,7 @@ export default function AdminUsersPage() {
       console.log('User updated successfully');
     } catch (error) {
       console.error('Error updating user:', error);
-      alert(`Failed to update user: ${error.message}`);
+      alert(`Failed to update user: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -257,7 +291,7 @@ export default function AdminUsersPage() {
         console.log('User deleted successfully');
       } catch (error) {
         console.error('Error deleting user:', error);
-        alert(`Failed to delete user: ${error.message}`);
+        alert(`Failed to delete user: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
   };
