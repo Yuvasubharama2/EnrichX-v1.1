@@ -61,58 +61,20 @@ export default function AdminUsersPage() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      console.log('Fetching users via Edge Function...');
+      console.log('Fetching users from profiles table...');
       
-      // Get the current user's session
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) {
-        console.error('Session error:', sessionError);
-        throw new Error(`Session error: ${sessionError.message}`);
-      }
-      
-      if (!sessionData?.session) {
-        throw new Error('No active session');
-      }
+      // Fetch users from the profiles table
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      // Validate environment variables
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      if (!supabaseUrl) {
-        throw new Error('VITE_SUPABASE_URL environment variable is not set');
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+        throw profilesError;
       }
 
-      // Construct the Edge Function URL properly
-      const baseUrl = supabaseUrl.endsWith('/') ? supabaseUrl.slice(0, -1) : supabaseUrl;
-      const apiUrl = `${baseUrl}/functions/v1/admin-users`;
-      
-      console.log('Edge Function URL:', apiUrl);
-      console.log('Using access token:', sessionData.session.access_token ? 'Present' : 'Missing');
-
-      // Call the admin-users Edge Function
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${sessionData.session.access_token}`,
-          'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
-        },
-      });
-
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Edge Function error response:', errorText);
-        throw new Error(`Edge Function failed: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log('Edge Function response:', result);
-
-      if (result.error) {
-        throw new Error(result.error);
-      }
+      console.log('Profiles fetched:', profilesData?.length || 0);
 
       const getDefaultCredits = (tier: string) => {
         switch (tier) {
@@ -123,22 +85,22 @@ export default function AdminUsersPage() {
         }
       };
 
-      const userData: UserData[] = result.users.map((user: any) => {
-        const metadata = user.user_metadata || {};
-        const isAdminUser = user.email === 'admin@enrichx.com';
+      // Transform profiles data to UserData format
+      const userData: UserData[] = (profilesData || []).map(profile => {
+        const isAdminUser = profile.email === 'admin@enrichx.com';
         
         return {
-          id: user.id,
-          email: user.email || '',
-          name: metadata.name || (isAdminUser ? 'Admin User' : user.email?.split('@')[0] || ''),
-          company_name: metadata.company_name || '',
-          role: isAdminUser ? 'admin' : (metadata.role || 'subscriber'),
-          subscription_tier: isAdminUser ? 'enterprise' : (metadata.subscription_tier || 'free'),
-          credits_remaining: metadata.credits_remaining || getDefaultCredits(isAdminUser ? 'enterprise' : (metadata.subscription_tier || 'free')),
-          credits_monthly_limit: getDefaultCredits(isAdminUser ? 'enterprise' : (metadata.subscription_tier || 'free')),
-          subscription_status: metadata.subscription_status || 'active',
-          created_at: user.created_at,
-          last_sign_in_at: user.last_sign_in_at
+          id: profile.id,
+          email: profile.email || '',
+          name: profile.name || (isAdminUser ? 'Admin User' : profile.email?.split('@')[0] || ''),
+          company_name: profile.company_name || '',
+          role: isAdminUser ? 'admin' : (profile.role || 'subscriber'),
+          subscription_tier: isAdminUser ? 'enterprise' : (profile.subscription_tier || 'free'),
+          credits_remaining: profile.credits_remaining || getDefaultCredits(isAdminUser ? 'enterprise' : (profile.subscription_tier || 'free')),
+          credits_monthly_limit: profile.credits_monthly_limit || getDefaultCredits(isAdminUser ? 'enterprise' : (profile.subscription_tier || 'free')),
+          subscription_status: profile.subscription_status || 'active',
+          created_at: profile.created_at,
+          last_sign_in_at: profile.last_sign_in_at
         };
       });
 
@@ -242,17 +204,43 @@ export default function AdminUsersPage() {
     if (!editingUser) return;
 
     try {
-      console.log('Updating user:', editingUser.id, editForm);
+      console.log('Updating user in profiles table:', editingUser.id, editForm);
       
-      const { error } = await supabase.auth.admin.updateUserById(editingUser.id, {
-        user_metadata: {
-          ...editForm
-        }
-      });
+      // Update user in profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          name: editForm.name,
+          company_name: editForm.company_name,
+          role: editForm.role,
+          subscription_tier: editForm.subscription_tier,
+          credits_remaining: editForm.credits_remaining,
+          credits_monthly_limit: editForm.credits_monthly_limit,
+          subscription_status: editForm.subscription_status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingUser.id);
 
-      if (error) {
-        console.error('Error updating user:', error);
-        throw error;
+      if (profileError) {
+        console.error('Error updating profile:', profileError);
+        throw profileError;
+      }
+
+      // Also update auth user metadata for consistency
+      try {
+        const { error: authError } = await supabase.auth.updateUser({
+          data: {
+            ...editForm
+          }
+        });
+
+        if (authError) {
+          console.warn('Warning: Could not update auth metadata:', authError);
+          // Don't throw here as the profile update succeeded
+        }
+      } catch (authUpdateError) {
+        console.warn('Auth metadata update failed:', authUpdateError);
+        // Continue as profile update succeeded
       }
 
       // Update local state
@@ -280,11 +268,27 @@ export default function AdminUsersPage() {
 
     if (confirm(`Are you sure you want to delete user ${userEmail}?`)) {
       try {
-        const { error } = await supabase.auth.admin.deleteUser(userId);
+        // Delete from profiles table
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .delete()
+          .eq('id', userId);
 
-        if (error) {
-          console.error('Error deleting user:', error);
-          throw error;
+        if (profileError) {
+          console.error('Error deleting profile:', profileError);
+          throw profileError;
+        }
+
+        // Also try to delete from auth (this might fail if we don't have admin privileges)
+        try {
+          const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+          if (authError) {
+            console.warn('Warning: Could not delete auth user:', authError);
+            // Don't throw here as the profile deletion succeeded
+          }
+        } catch (authDeleteError) {
+          console.warn('Auth user deletion failed:', authDeleteError);
+          // Continue as profile deletion succeeded
         }
 
         setUsers(prev => prev.filter(user => user.id !== userId));
