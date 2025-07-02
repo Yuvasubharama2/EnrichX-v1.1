@@ -39,6 +39,7 @@ export default function AdminUsersPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<FilterState>({
     role: [],
@@ -90,38 +91,150 @@ export default function AdminUsersPage() {
     applyFilters();
   }, [users, searchQuery, filters]);
 
-  const fetchUsers = async () => {
-    try {
-      setRefreshing(true);
-      console.log('Fetching users from profiles table...');
-      
-      const { data: profilesData, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching profiles:', error);
-        throw error;
-      }
-
-      console.log('Profiles fetched:', profilesData?.length || 0);
-      setUsers(profilesData || []);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      alert(`Failed to load users: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
   const getDefaultCredits = (tier: SubscriptionTier) => {
     switch (tier) {
       case 'enterprise': return 10000;
       case 'pro': return 2000;
       case 'free': return 50;
       default: return 50;
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      setRefreshing(true);
+      setError(null);
+      console.log('Fetching users from profiles table...');
+      
+      // First, check if current user is admin
+      if (!currentUser || currentUser.role !== 'admin') {
+        throw new Error('Access denied. Admin privileges required.');
+      }
+
+      // Try to fetch from profiles table first
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+        
+        // If profiles table doesn't exist or has issues, try to get auth users
+        console.log('Falling back to auth users...');
+        
+        try {
+          const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+          
+          if (authError) {
+            throw new Error(`Auth error: ${authError.message}`);
+          }
+
+          // Convert auth users to profile format
+          const convertedUsers: UserProfile[] = authUsers.users.map(user => {
+            const metadata = user.user_metadata || {};
+            const isAdmin = user.email === 'admin@enrichx.com';
+            const role = isAdmin ? 'admin' : (metadata.role || 'subscriber');
+            const tier = isAdmin ? 'enterprise' : (metadata.subscription_tier || 'free');
+            const defaultCredits = getDefaultCredits(tier);
+            
+            return {
+              id: user.id,
+              email: user.email || '',
+              name: metadata.name || (isAdmin ? 'Admin User' : user.email?.split('@')[0] || ''),
+              company_name: metadata.company_name || '',
+              role: role,
+              subscription_tier: tier,
+              credits_remaining: metadata.credits_remaining || defaultCredits,
+              credits_monthly_limit: defaultCredits,
+              subscription_status: metadata.subscription_status || 'active',
+              last_sign_in_at: user.last_sign_in_at,
+              created_at: user.created_at,
+              updated_at: user.updated_at || user.created_at
+            };
+          });
+
+          console.log('Auth users converted:', convertedUsers.length);
+          setUsers(convertedUsers);
+          return;
+        } catch (authFallbackError) {
+          console.error('Auth fallback also failed:', authFallbackError);
+          throw new Error('Unable to fetch user data from both profiles and auth tables');
+        }
+      }
+
+      console.log('Profiles fetched:', profilesData?.length || 0);
+      
+      // If we have profiles data, use it
+      if (profilesData && profilesData.length > 0) {
+        setUsers(profilesData);
+      } else {
+        // If profiles table is empty, try to create admin profile
+        console.log('No profiles found, checking for admin user...');
+        
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser && authUser.email === 'admin@enrichx.com') {
+          // Create admin profile
+          const adminProfile: UserProfile = {
+            id: authUser.id,
+            email: authUser.email,
+            name: 'Admin User',
+            company_name: '',
+            role: 'admin',
+            subscription_tier: 'enterprise',
+            credits_remaining: 10000,
+            credits_monthly_limit: 10000,
+            subscription_status: 'active',
+            last_sign_in_at: authUser.last_sign_in_at,
+            created_at: authUser.created_at,
+            updated_at: authUser.updated_at || authUser.created_at
+          };
+          
+          // Try to insert admin profile
+          try {
+            const { error: insertError } = await supabase
+              .from('profiles')
+              .insert(adminProfile);
+            
+            if (!insertError) {
+              setUsers([adminProfile]);
+              console.log('Admin profile created successfully');
+            } else {
+              console.error('Failed to create admin profile:', insertError);
+              setUsers([adminProfile]); // Still show the admin user
+            }
+          } catch (insertError) {
+            console.error('Error inserting admin profile:', insertError);
+            setUsers([adminProfile]); // Still show the admin user
+          }
+        } else {
+          setUsers([]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load users');
+      
+      // As a last resort, show current user if they're admin
+      if (currentUser && currentUser.role === 'admin') {
+        const fallbackUser: UserProfile = {
+          id: currentUser.id,
+          email: currentUser.email,
+          name: currentUser.name,
+          company_name: currentUser.company_name || '',
+          role: currentUser.role,
+          subscription_tier: currentUser.subscription_tier,
+          credits_remaining: currentUser.credits_remaining,
+          credits_monthly_limit: currentUser.credits_monthly_limit,
+          subscription_status: currentUser.subscription_status,
+          created_at: currentUser.created_at.toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        setUsers([fallbackUser]);
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -200,7 +313,7 @@ export default function AdminUsersPage() {
         setShowCreateModal(false);
         
         // Refresh the users list
-        await fetchUsers();
+        setTimeout(() => fetchUsers(), 1000); // Give time for trigger to execute
         
         alert('User created successfully!');
       }
@@ -233,7 +346,8 @@ export default function AdminUsersPage() {
     try {
       console.log('Updating user profile:', editingUser.id, editForm);
       
-      const { error } = await supabase
+      // Try to update profiles table first
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           name: editForm.name,
@@ -247,9 +361,24 @@ export default function AdminUsersPage() {
         })
         .eq('id', editingUser.id);
 
-      if (error) {
-        console.error('Error updating profile:', error);
-        throw error;
+      if (profileError) {
+        console.error('Error updating profile:', profileError);
+        
+        // Fallback to updating auth metadata
+        const { error: authError } = await supabase.auth.admin.updateUserById(editingUser.id, {
+          user_metadata: {
+            name: editForm.name,
+            company_name: editForm.company_name,
+            role: editForm.role,
+            subscription_tier: editForm.subscription_tier,
+            credits_remaining: editForm.credits_remaining,
+            subscription_status: editForm.subscription_status
+          }
+        });
+
+        if (authError) {
+          throw authError;
+        }
       }
 
       // Update local state
@@ -286,14 +415,21 @@ export default function AdminUsersPage() {
     if (confirm(`Are you sure you want to delete user ${userEmail}? This action cannot be undone.`)) {
       setActionLoading(userId);
       try {
-        const { error } = await supabase
+        // Try to delete from profiles table first
+        const { error: profileError } = await supabase
           .from('profiles')
           .delete()
           .eq('id', userId);
 
-        if (error) {
-          console.error('Error deleting profile:', error);
-          throw error;
+        if (profileError) {
+          console.error('Error deleting profile:', profileError);
+          
+          // Fallback to deleting auth user
+          const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+          
+          if (authError) {
+            throw authError;
+          }
         }
 
         setUsers(prev => prev.filter(user => user.id !== userId));
@@ -313,7 +449,8 @@ export default function AdminUsersPage() {
     
     setActionLoading(`reset-${userId}`);
     try {
-      const { error } = await supabase
+      // Try to update profiles table first
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           credits_remaining: defaultCredits,
@@ -321,7 +458,20 @@ export default function AdminUsersPage() {
         })
         .eq('id', userId);
 
-      if (error) throw error;
+      if (profileError) {
+        console.error('Error updating profile credits:', profileError);
+        
+        // Fallback to updating auth metadata
+        const { error: authError } = await supabase.auth.admin.updateUserById(userId, {
+          user_metadata: {
+            credits_remaining: defaultCredits
+          }
+        });
+
+        if (authError) {
+          throw authError;
+        }
+      }
 
       setUsers(prev => prev.map(user => 
         user.id === userId 
@@ -424,6 +574,19 @@ export default function AdminUsersPage() {
           </span>
         </div>
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+            <div>
+              <h4 className="text-sm font-medium text-red-800">Error Loading Users</h4>
+              <p className="text-sm text-red-700 mt-1">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search and Controls */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
