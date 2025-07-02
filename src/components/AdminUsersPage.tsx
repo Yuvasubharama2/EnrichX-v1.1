@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Filter, Shield, CreditCard, Edit3, Trash2, Plus, Check, X, Crown, User, Building2 } from 'lucide-react';
+import { Users, Search, Filter, Shield, CreditCard, Edit3, Trash2, Plus, Check, X, Crown, User, Building2, RefreshCw, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Database } from '../types/database';
+import { useAuth } from '../contexts/AuthContext';
 
 type SubscriptionTier = Database['public']['Enums']['subscription_tier'];
 
-interface UserData {
+interface UserProfile {
   id: string;
   email: string;
   name: string;
@@ -15,8 +16,9 @@ interface UserData {
   credits_remaining: number;
   credits_monthly_limit: number;
   subscription_status: 'active' | 'canceled' | 'past_due';
-  created_at: string;
   last_sign_in_at?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface FilterState {
@@ -26,13 +28,17 @@ interface FilterState {
 }
 
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<UserData[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<UserData[]>([]);
+  const { user: currentUser } = useAuth();
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [editingUser, setEditingUser] = useState<UserData | null>(null);
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<FilterState>({
     role: [],
@@ -50,8 +56,34 @@ export default function AdminUsersPage() {
     subscription_status: 'active' as 'active' | 'canceled' | 'past_due'
   });
 
+  const [createForm, setCreateForm] = useState({
+    email: '',
+    password: '',
+    name: '',
+    company_name: '',
+    role: 'subscriber' as 'admin' | 'subscriber',
+    subscription_tier: 'free' as SubscriptionTier,
+    subscription_status: 'active' as 'active' | 'canceled' | 'past_due'
+  });
+
   useEffect(() => {
     fetchUsers();
+    
+    // Set up real-time subscription for profile changes
+    const subscription = supabase
+      .channel('profiles-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'profiles' },
+        (payload) => {
+          console.log('Profile change detected:', payload);
+          fetchUsers(); // Refresh the list when changes occur
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -60,99 +92,31 @@ export default function AdminUsersPage() {
 
   const fetchUsers = async () => {
     try {
-      setLoading(true);
+      setRefreshing(true);
       console.log('Fetching users from profiles table...');
       
-      // Fetch users from the profiles table
-      const { data: profilesData, error: profilesError } = await supabase
+      const { data: profilesData, error } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (profilesError) {
-        console.error('Error fetching profiles:', profilesError);
-        throw profilesError;
+      if (error) {
+        console.error('Error fetching profiles:', error);
+        throw error;
       }
 
       console.log('Profiles fetched:', profilesData?.length || 0);
-
-      const getDefaultCredits = (tier: string) => {
-        switch (tier) {
-          case 'enterprise': return 10000;
-          case 'pro': return 2000;
-          case 'free': return 50;
-          default: return 50;
-        }
-      };
-
-      // Transform profiles data to UserData format
-      const userData: UserData[] = (profilesData || []).map(profile => {
-        const isAdminUser = profile.email === 'admin@enrichx.com';
-        
-        return {
-          id: profile.id,
-          email: profile.email || '',
-          name: profile.name || (isAdminUser ? 'Admin User' : profile.email?.split('@')[0] || ''),
-          company_name: profile.company_name || '',
-          role: isAdminUser ? 'admin' : (profile.role || 'subscriber'),
-          subscription_tier: isAdminUser ? 'enterprise' : (profile.subscription_tier || 'free'),
-          credits_remaining: profile.credits_remaining || getDefaultCredits(isAdminUser ? 'enterprise' : (profile.subscription_tier || 'free')),
-          credits_monthly_limit: profile.credits_monthly_limit || getDefaultCredits(isAdminUser ? 'enterprise' : (profile.subscription_tier || 'free')),
-          subscription_status: profile.subscription_status || 'active',
-          created_at: profile.created_at,
-          last_sign_in_at: profile.last_sign_in_at
-        };
-      });
-
-      console.log('Processed user data:', userData);
-      setUsers(userData);
+      setUsers(profilesData || []);
     } catch (error) {
       console.error('Error fetching users:', error);
-      
-      // Enhanced fallback with better error handling
-      try {
-        console.log('Trying fallback method...');
-        const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
-        
-        if (userError) {
-          console.error('Fallback user fetch error:', userError);
-          throw userError;
-        }
-        
-        if (currentUser) {
-          const mockUsers: UserData[] = [
-            {
-              id: currentUser.id,
-              email: currentUser.email || '',
-              name: currentUser.user_metadata?.name || 'Admin User',
-              company_name: currentUser.user_metadata?.company_name || '',
-              role: 'admin',
-              subscription_tier: 'enterprise',
-              credits_remaining: 10000,
-              credits_monthly_limit: 10000,
-              subscription_status: 'active',
-              created_at: currentUser.created_at,
-              last_sign_in_at: currentUser.last_sign_in_at
-            }
-          ];
-          setUsers(mockUsers);
-          console.log('Using fallback data with current user');
-        } else {
-          throw new Error('No current user found in fallback');
-        }
-      } catch (fallbackError) {
-        console.error('Fallback method also failed:', fallbackError);
-        // Set empty array to prevent infinite loading
-        setUsers([]);
-        // Show user-friendly error message
-        alert(`Failed to load users: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your connection and try again.`);
-      }
+      alert(`Failed to load users: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const getDefaultCredits = (tier: string) => {
+  const getDefaultCredits = (tier: SubscriptionTier) => {
     switch (tier) {
       case 'enterprise': return 10000;
       case 'pro': return 2000;
@@ -177,7 +141,7 @@ export default function AdminUsersPage() {
     Object.entries(filters).forEach(([field, values]) => {
       if (values.length > 0) {
         filtered = filtered.filter(user => {
-          const userValue = user[field as keyof UserData];
+          const userValue = user[field as keyof UserProfile];
           return values.includes(userValue as string);
         });
       }
@@ -186,7 +150,69 @@ export default function AdminUsersPage() {
     setFilteredUsers(filtered);
   };
 
-  const handleEditUser = (user: UserData) => {
+  const handleCreateUser = async () => {
+    if (!createForm.email || !createForm.password || !createForm.name) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    setActionLoading('create');
+    try {
+      console.log('Creating new user:', createForm.email);
+      
+      const defaultCredits = getDefaultCredits(createForm.subscription_tier);
+      
+      // Create user with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: createForm.email,
+        password: createForm.password,
+        options: {
+          data: {
+            name: createForm.name,
+            company_name: createForm.company_name,
+            role: createForm.role,
+            subscription_tier: createForm.subscription_tier,
+            credits_remaining: defaultCredits,
+            subscription_status: createForm.subscription_status
+          }
+        }
+      });
+
+      if (authError) {
+        console.error('Error creating auth user:', authError);
+        throw authError;
+      }
+
+      if (authData.user) {
+        // The profile will be created automatically by the trigger
+        console.log('User created successfully');
+        
+        // Reset form and close modal
+        setCreateForm({
+          email: '',
+          password: '',
+          name: '',
+          company_name: '',
+          role: 'subscriber',
+          subscription_tier: 'free',
+          subscription_status: 'active'
+        });
+        setShowCreateModal(false);
+        
+        // Refresh the users list
+        await fetchUsers();
+        
+        alert('User created successfully!');
+      }
+    } catch (error) {
+      console.error('Error creating user:', error);
+      alert(`Failed to create user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleEditUser = (user: UserProfile) => {
     setEditingUser(user);
     setEditForm({
       name: user.name,
@@ -203,11 +229,11 @@ export default function AdminUsersPage() {
   const handleUpdateUser = async () => {
     if (!editingUser) return;
 
+    setActionLoading('update');
     try {
-      console.log('Updating user in profiles table:', editingUser.id, editForm);
+      console.log('Updating user profile:', editingUser.id, editForm);
       
-      // Update user in profiles table
-      const { error: profileError } = await supabase
+      const { error } = await supabase
         .from('profiles')
         .update({
           name: editForm.name,
@@ -221,32 +247,15 @@ export default function AdminUsersPage() {
         })
         .eq('id', editingUser.id);
 
-      if (profileError) {
-        console.error('Error updating profile:', profileError);
-        throw profileError;
-      }
-
-      // Also update auth user metadata for consistency
-      try {
-        const { error: authError } = await supabase.auth.updateUser({
-          data: {
-            ...editForm
-          }
-        });
-
-        if (authError) {
-          console.warn('Warning: Could not update auth metadata:', authError);
-          // Don't throw here as the profile update succeeded
-        }
-      } catch (authUpdateError) {
-        console.warn('Auth metadata update failed:', authUpdateError);
-        // Continue as profile update succeeded
+      if (error) {
+        console.error('Error updating profile:', error);
+        throw error;
       }
 
       // Update local state
       setUsers(prev => prev.map(user => 
         user.id === editingUser.id 
-          ? { ...user, ...editForm }
+          ? { ...user, ...editForm, updated_at: new Date().toISOString() }
           : user
       ));
 
@@ -254,49 +263,78 @@ export default function AdminUsersPage() {
       setEditingUser(null);
       
       console.log('User updated successfully');
+      alert('User updated successfully!');
     } catch (error) {
       console.error('Error updating user:', error);
       alert(`Failed to update user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleDeleteUser = async (userId: string, userEmail: string) => {
     if (userEmail === 'admin@enrichx.com') {
-      alert('Cannot delete admin user');
+      alert('Cannot delete the main admin user');
       return;
     }
 
-    if (confirm(`Are you sure you want to delete user ${userEmail}?`)) {
+    if (userId === currentUser?.id) {
+      alert('Cannot delete your own account');
+      return;
+    }
+
+    if (confirm(`Are you sure you want to delete user ${userEmail}? This action cannot be undone.`)) {
+      setActionLoading(userId);
       try {
-        // Delete from profiles table
-        const { error: profileError } = await supabase
+        const { error } = await supabase
           .from('profiles')
           .delete()
           .eq('id', userId);
 
-        if (profileError) {
-          console.error('Error deleting profile:', profileError);
-          throw profileError;
-        }
-
-        // Also try to delete from auth (this might fail if we don't have admin privileges)
-        try {
-          const { error: authError } = await supabase.auth.admin.deleteUser(userId);
-          if (authError) {
-            console.warn('Warning: Could not delete auth user:', authError);
-            // Don't throw here as the profile deletion succeeded
-          }
-        } catch (authDeleteError) {
-          console.warn('Auth user deletion failed:', authDeleteError);
-          // Continue as profile deletion succeeded
+        if (error) {
+          console.error('Error deleting profile:', error);
+          throw error;
         }
 
         setUsers(prev => prev.filter(user => user.id !== userId));
         console.log('User deleted successfully');
+        alert('User deleted successfully');
       } catch (error) {
         console.error('Error deleting user:', error);
         alert(`Failed to delete user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } finally {
+        setActionLoading(null);
       }
+    }
+  };
+
+  const handleResetCredits = async (userId: string, tier: SubscriptionTier) => {
+    const defaultCredits = getDefaultCredits(tier);
+    
+    setActionLoading(`reset-${userId}`);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          credits_remaining: defaultCredits,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      setUsers(prev => prev.map(user => 
+        user.id === userId 
+          ? { ...user, credits_remaining: defaultCredits, updated_at: new Date().toISOString() }
+          : user
+      ));
+
+      alert('Credits reset successfully!');
+    } catch (error) {
+      console.error('Error resetting credits:', error);
+      alert(`Failed to reset credits: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -321,12 +359,30 @@ export default function AdminUsersPage() {
     return Object.values(filters).reduce((count, filterArray) => count + filterArray.length, 0);
   };
 
-  const getUniqueValues = (field: keyof UserData) => {
+  const getUniqueValues = (field: keyof UserProfile) => {
     const values = users
       .map(user => user[field])
       .filter(value => value && value !== '')
       .filter((value, index, self) => self.indexOf(value) === index);
     return values.sort();
+  };
+
+  const getTierColor = (tier: SubscriptionTier) => {
+    switch (tier) {
+      case 'enterprise': return 'bg-purple-100 text-purple-800';
+      case 'pro': return 'bg-blue-100 text-blue-800';
+      case 'free': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'past_due': return 'bg-yellow-100 text-yellow-800';
+      case 'canceled': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
   if (loading) {
@@ -344,10 +400,25 @@ export default function AdminUsersPage() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
           <p className="text-gray-600 mt-1">
-            Manage user accounts, roles, and subscription tiers
+            Manage user accounts, roles, subscription tiers, and access control
           </p>
         </div>
         <div className="flex items-center space-x-4">
+          <button
+            onClick={fetchUsers}
+            disabled={refreshing}
+            className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Create User
+          </button>
           <span className="text-sm text-gray-600">
             Total: {users.length} users
           </span>
@@ -547,13 +618,7 @@ export default function AdminUsersPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                      user.subscription_tier === 'enterprise' 
-                        ? 'bg-purple-100 text-purple-800'
-                        : user.subscription_tier === 'pro'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-green-100 text-green-800'
-                    }`}>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getTierColor(user.subscription_tier)}`}>
                       {user.subscription_tier}
                     </span>
                   </td>
@@ -565,19 +630,13 @@ export default function AdminUsersPage() {
                       <div 
                         className="bg-blue-600 h-1.5 rounded-full"
                         style={{ 
-                          width: `${(user.credits_remaining / user.credits_monthly_limit) * 100}%` 
+                          width: `${Math.min((user.credits_remaining / user.credits_monthly_limit) * 100, 100)}%` 
                         }}
                       />
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      user.subscription_status === 'active' 
-                        ? 'bg-green-100 text-green-800'
-                        : user.subscription_status === 'past_due'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(user.subscription_status)}`}>
                       {user.subscription_status.replace('_', ' ')}
                     </span>
                   </td>
@@ -588,15 +647,25 @@ export default function AdminUsersPage() {
                     <div className="flex items-center justify-center space-x-2">
                       <button
                         onClick={() => handleEditUser(user)}
-                        className="text-blue-600 hover:text-blue-900 p-1 rounded"
+                        disabled={actionLoading === 'update'}
+                        className="text-blue-600 hover:text-blue-900 p-1 rounded disabled:opacity-50"
                         title="Edit user"
                       >
                         <Edit3 className="w-4 h-4" />
                       </button>
-                      {user.email !== 'admin@enrichx.com' && (
+                      <button
+                        onClick={() => handleResetCredits(user.id, user.subscription_tier)}
+                        disabled={actionLoading === `reset-${user.id}`}
+                        className="text-green-600 hover:text-green-900 p-1 rounded disabled:opacity-50"
+                        title="Reset credits"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${actionLoading === `reset-${user.id}` ? 'animate-spin' : ''}`} />
+                      </button>
+                      {user.email !== 'admin@enrichx.com' && user.id !== currentUser?.id && (
                         <button
                           onClick={() => handleDeleteUser(user.id, user.email)}
-                          className="text-red-600 hover:text-red-900 p-1 rounded"
+                          disabled={actionLoading === user.id}
+                          className="text-red-600 hover:text-red-900 p-1 rounded disabled:opacity-50"
                           title="Delete user"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -617,12 +686,141 @@ export default function AdminUsersPage() {
             <p className="text-gray-600">
               {searchQuery || getActiveFiltersCount() > 0 
                 ? 'Try adjusting your search terms or filters' 
-                : 'No users have signed up yet'
+                : 'No users have been created yet'
               }
             </p>
           </div>
         )}
       </div>
+
+      {/* Create User Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowCreateModal(false)} />
+            
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="flex items-center mb-4">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                    <Plus className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900">Create New User</h3>
+                </div>
+                
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Email *</label>
+                      <input
+                        type="email"
+                        value={createForm.email}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="user@example.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Password *</label>
+                      <input
+                        type="password"
+                        value={createForm.password}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, password: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Minimum 6 characters"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
+                    <input
+                      type="text"
+                      value={createForm.name}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="John Doe"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
+                    <input
+                      type="text"
+                      value={createForm.company_name}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, company_name: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Acme Corp"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+                      <select
+                        value={createForm.role}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, role: e.target.value as 'admin' | 'subscriber' }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="subscriber">Subscriber</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Subscription Tier</label>
+                      <select
+                        value={createForm.subscription_tier}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, subscription_tier: e.target.value as SubscriptionTier }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="free">Free ({getDefaultCredits('free')} credits)</option>
+                        <option value="pro">Pro ({getDefaultCredits('pro')} credits)</option>
+                        <option value="enterprise">Enterprise ({getDefaultCredits('enterprise')} credits)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select
+                      value={createForm.subscription_status}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, subscription_status: e.target.value as 'active' | 'canceled' | 'past_due' }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="active">Active</option>
+                      <option value="canceled">Canceled</option>
+                      <option value="past_due">Past Due</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  onClick={handleCreateUser}
+                  disabled={actionLoading === 'create' || !createForm.email || !createForm.password || !createForm.name}
+                  className="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {actionLoading === 'create' ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  ) : (
+                    <Check className="w-4 h-4 mr-2" />
+                  )}
+                  Create User
+                </button>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  disabled={actionLoading === 'create'}
+                  className="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit User Modal */}
       {showEditModal && editingUser && (
@@ -683,15 +881,14 @@ export default function AdminUsersPage() {
                         setEditForm(prev => ({ 
                           ...prev, 
                           subscription_tier: tier,
-                          credits_monthly_limit: credits,
-                          credits_remaining: credits
+                          credits_monthly_limit: credits
                         }));
                       }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
-                      <option value="free">Free (50 credits)</option>
-                      <option value="pro">Pro (2,000 credits)</option>
-                      <option value="enterprise">Enterprise (10,000 credits)</option>
+                      <option value="free">Free ({getDefaultCredits('free')} credits)</option>
+                      <option value="pro">Pro ({getDefaultCredits('pro')} credits)</option>
+                      <option value="enterprise">Enterprise ({getDefaultCredits('enterprise')} credits)</option>
                     </select>
                   </div>
 
@@ -703,6 +900,7 @@ export default function AdminUsersPage() {
                         value={editForm.credits_remaining}
                         onChange={(e) => setEditForm(prev => ({ ...prev, credits_remaining: parseInt(e.target.value) || 0 }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        min="0"
                       />
                     </div>
                     <div>
@@ -712,6 +910,7 @@ export default function AdminUsersPage() {
                         value={editForm.credits_monthly_limit}
                         onChange={(e) => setEditForm(prev => ({ ...prev, credits_monthly_limit: parseInt(e.target.value) || 0 }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        min="0"
                       />
                     </div>
                   </div>
@@ -734,14 +933,20 @@ export default function AdminUsersPage() {
               <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <button
                   onClick={handleUpdateUser}
-                  className="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
+                  disabled={actionLoading === 'update'}
+                  className="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Check className="w-4 h-4 mr-2" />
+                  {actionLoading === 'update' ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  ) : (
+                    <Check className="w-4 h-4 mr-2" />
+                  )}
                   Update User
                 </button>
                 <button
                   onClick={() => setShowEditModal(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  disabled={actionLoading === 'update'}
+                  className="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                 >
                   <X className="w-4 h-4 mr-2" />
                   Cancel
@@ -751,6 +956,49 @@ export default function AdminUsersPage() {
           </div>
         </div>
       )}
+
+      {/* Info Panel */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+        <h4 className="text-sm font-medium text-blue-900 mb-4">User Management Features</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-blue-800">
+          <div className="flex items-start space-x-2">
+            <CheckCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <strong>Role-Based Access:</strong> Control user permissions with admin and subscriber roles
+            </div>
+          </div>
+          <div className="flex items-start space-x-2">
+            <CheckCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <strong>Credit Management:</strong> Monitor and adjust user credit balances and limits
+            </div>
+          </div>
+          <div className="flex items-start space-x-2">
+            <CheckCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <strong>Subscription Tiers:</strong> Manage Free, Pro, and Enterprise access levels
+            </div>
+          </div>
+          <div className="flex items-start space-x-2">
+            <CheckCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <strong>Real-time Updates:</strong> Changes sync automatically across the platform
+            </div>
+          </div>
+          <div className="flex items-start space-x-2">
+            <CheckCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <strong>Secure Operations:</strong> All actions protected by Row Level Security
+            </div>
+          </div>
+          <div className="flex items-start space-x-2">
+            <CheckCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <strong>Audit Trail:</strong> Track user creation, updates, and access patterns
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

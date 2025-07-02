@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Download, Plus, Star, Building2, Mail, Phone, MapPin, ExternalLink, Globe, ChevronDown, ChevronUp, X, Heart, BookmarkPlus, Check, Calendar, Linkedin, Eye, EyeOff } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, deductUserCredits } from '../lib/supabase';
 import { Database } from '../types/database';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -50,6 +50,7 @@ export default function UserDashboard() {
   const [showSaveListModal, setShowSaveListModal] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [newListDescription, setNewListDescription] = useState('');
+  const [revealingEmail, setRevealingEmail] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<FilterState>({
     job_title: [],
@@ -296,31 +297,28 @@ export default function UserDashboard() {
       return;
     }
 
+    setRevealingEmail(contactId);
     try {
-      // Deduct 1 credit from user
-      const newCredits = user.credits_remaining - 1;
+      // Use the new deductUserCredits helper function
+      const result = await deductUserCredits(user.id, 1);
       
-      // Update user metadata in Supabase
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          ...user,
-          credits_remaining: newCredits
-        }
-      });
-
-      if (error) throw error;
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to deduct credits');
+      }
 
       // Add to revealed emails
       const newRevealed = [...revealedEmails, contactId];
       saveRevealedEmails(newRevealed);
 
-      // Update user context
-      updateUser({ credits_remaining: newCredits });
+      // Update user context with new credit balance
+      updateUser({ credits_remaining: result.credits_remaining });
 
       console.log('Email revealed successfully, credits deducted');
     } catch (error) {
       console.error('Error revealing email:', error);
-      alert('Failed to reveal email');
+      alert(`Failed to reveal email: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setRevealingEmail(null);
     }
   };
 
@@ -919,11 +917,15 @@ export default function UserDashboard() {
                                 </div>
                                 <button
                                   onClick={() => handleRevealEmail(contact.contact_id)}
-                                  disabled={user?.credits_remaining === 0}
+                                  disabled={user?.credits_remaining === 0 || revealingEmail === contact.contact_id}
                                   className="flex items-center px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title={user?.credits_remaining === 0 ? 'No credits remaining' : 'Reveal email'}
+                                  title={user?.credits_remaining === 0 ? 'No credits remaining' : 'Reveal email (1 credit)'}
                                 >
-                                  <Eye className="w-3 h-3 mr-1" />
+                                  {revealingEmail === contact.contact_id ? (
+                                    <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-1" />
+                                  ) : (
+                                    <Eye className="w-3 h-3 mr-1" />
+                                  )}
                                   Reveal
                                 </button>
                               </div>

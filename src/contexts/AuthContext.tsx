@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (session?.user) {
-          const userData = createUserFromSupabaseUser(session.user);
+          const userData = await createUserFromSupabaseUser(session.user);
           setUser(userData);
           
           // Setup activity monitoring for logged-in users
@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('Auth state changed:', event, session?.user?.email);
         
         if (session?.user) {
-          const userData = createUserFromSupabaseUser(session.user);
+          const userData = await createUserFromSupabaseUser(session.user);
           setUser(userData);
           
           // Setup activity monitoring for newly logged-in users
@@ -137,10 +137,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const createUserFromSupabaseUser = (supabaseUser: any): User => {
+  const createUserFromSupabaseUser = async (supabaseUser: any): Promise<User> => {
+    // First try to get user data from profiles table
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', supabaseUser.id)
+        .single();
+
+      if (profile && !error) {
+        // Use profile data
+        return {
+          id: profile.id,
+          email: profile.email,
+          name: profile.name || supabaseUser.email.split('@')[0],
+          role: profile.role,
+          subscription_tier: profile.subscription_tier,
+          credits_remaining: profile.credits_remaining,
+          credits_monthly_limit: profile.credits_monthly_limit,
+          subscription_status: profile.subscription_status,
+          created_at: new Date(profile.created_at),
+          last_login: new Date(),
+          billing_cycle_start: new Date(profile.created_at),
+          billing_cycle_end: new Date(new Date(profile.created_at).getTime() + 30 * 24 * 60 * 60 * 1000),
+          exports_this_month: { companies: 0, contacts: 0 },
+          company_name: profile.company_name || ''
+        };
+      }
+    } catch (error) {
+      console.warn('Could not fetch profile, falling back to metadata:', error);
+    }
+
+    // Fallback to user metadata
     const metadata = supabaseUser.user_metadata || {};
-    
-    // Special handling for admin@enrichx.com
     const isAdmin = supabaseUser.email === 'admin@enrichx.com';
     const role = isAdmin ? 'admin' : (metadata.role || 'subscriber');
     const tier = isAdmin ? 'enterprise' : (metadata.subscription_tier || 'free');
@@ -216,7 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (signUpError) throw signUpError;
         
         if (signUpData.user) {
-          const userData = createUserFromSupabaseUser(signUpData.user);
+          const userData = await createUserFromSupabaseUser(signUpData.user);
           setUser(userData);
           return userData;
         }
@@ -230,17 +260,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (signInError) throw signInError;
         
         if (signInData.user) {
-          // Update metadata for admin if needed
-          if (email === 'admin@enrichx.com') {
-            await updateUserMetadata({
-              role: 'admin',
-              subscription_tier: 'enterprise',
-              credits_remaining: 10000,
-              name: 'Admin User'
-            });
+          // Update last_sign_in_at in profiles table
+          try {
+            await supabase
+              .from('profiles')
+              .update({ last_sign_in_at: new Date().toISOString() })
+              .eq('id', signInData.user.id);
+          } catch (profileError) {
+            console.warn('Could not update last sign in time:', profileError);
           }
-          
-          const userData = createUserFromSupabaseUser(signInData.user);
+
+          const userData = await createUserFromSupabaseUser(signInData.user);
           setUser(userData);
           return userData;
         }
