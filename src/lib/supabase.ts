@@ -34,20 +34,33 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 export const getCurrentUserTier = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   
-  // Try to get from profiles table first
+  // Try to get from profiles table first (new schema)
   if (user) {
     try {
       const { data: profile } = await supabase
         .from('profiles')
         .select('subscription_tier')
-        .eq('id', user.id)
+        .eq('user_id', user.id)
         .single();
       
       if (profile) {
         return profile.subscription_tier;
       }
     } catch (error) {
-      console.warn('Could not fetch user tier from profiles:', error);
+      // Try old schema
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('subscription_tier')
+          .eq('id', user.id)
+          .single();
+        
+        if (profile) {
+          return profile.subscription_tier;
+        }
+      } catch (oldError) {
+        console.warn('Could not fetch user tier from profiles:', oldError);
+      }
     }
   }
   
@@ -59,20 +72,33 @@ export const getCurrentUserTier = async () => {
 export const getCurrentUserRole = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   
-  // Try to get from profiles table first
+  // Try to get from profiles table first (new schema)
   if (user) {
     try {
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', user.id)
+        .eq('user_id', user.id)
         .single();
       
       if (profile) {
         return profile.role;
       }
     } catch (error) {
-      console.warn('Could not fetch user role from profiles:', error);
+      // Try old schema
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        
+        if (profile) {
+          return profile.role;
+        }
+      } catch (oldError) {
+        console.warn('Could not fetch user role from profiles:', oldError);
+      }
     }
   }
   
@@ -92,27 +118,89 @@ export const updateUserMetadata = async (metadata: any) => {
   return { data, error };
 };
 
-// Helper function to update user profile
+// Helper function to update user profile (supports both schema versions)
 export const updateUserProfile = async (userId: string, profileData: any) => {
-  const { data, error } = await supabase
-    .from('profiles')
-    .update(profileData)
-    .eq('id', userId)
-    .select()
-    .single();
-  
-  return { data, error };
+  // Try new schema first
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(profileData)
+      .eq('user_id', userId)
+      .select()
+      .single();
+    
+    if (!error) {
+      return { data, error };
+    }
+  } catch (newSchemaError) {
+    console.warn('New schema update failed, trying old schema:', newSchemaError);
+  }
+
+  // Fallback to old schema
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(profileData)
+      .eq('id', userId)
+      .select()
+      .single();
+    
+    return { data, error };
+  } catch (oldSchemaError) {
+    console.error('Both schema updates failed:', oldSchemaError);
+    return { data: null, error: oldSchemaError };
+  }
 };
 
-// Helper function to get user profile
+// Helper function to get user profile (supports both schema versions)
 export const getUserProfile = async (userId: string) => {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
-  
-  return { data, error };
+  // Try new schema first
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select(`
+        user_id,
+        username,
+        email,
+        full_name,
+        role,
+        subscription_tier,
+        subscription_status,
+        credits_remaining,
+        credits_monthly_limit,
+        company_name,
+        billing_cycle_start,
+        billing_cycle_end,
+        last_sign_in_at,
+        email_verified,
+        phone_verified,
+        phone,
+        created_at,
+        updated_at
+      `)
+      .eq('user_id', userId)
+      .single();
+    
+    if (!error && data) {
+      return { data, error };
+    }
+  } catch (newSchemaError) {
+    console.warn('New schema fetch failed, trying old schema:', newSchemaError);
+  }
+
+  // Fallback to old schema
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    
+    return { data, error };
+  } catch (oldSchemaError) {
+    console.error('Both schema fetches failed:', oldSchemaError);
+    return { data: null, error: oldSchemaError };
+  }
 };
 
 // Helper function to check if user is admin
@@ -121,7 +209,7 @@ export const isUserAdmin = async () => {
   return role === 'admin';
 };
 
-// Helper function to deduct credits from user
+// Helper function to deduct credits from user (supports both schema versions)
 export const deductUserCredits = async (userId: string, amount: number = 1) => {
   try {
     // Get current credits
@@ -131,16 +219,19 @@ export const deductUserCredits = async (userId: string, amount: number = 1) => {
       throw new Error('Could not fetch user profile');
     }
     
-    if (profile.credits_remaining < amount) {
+    const currentCredits = profile.credits_remaining || 0;
+    if (currentCredits < amount) {
       throw new Error('Insufficient credits');
     }
     
     // Deduct credits
-    const newCredits = profile.credits_remaining - amount;
-    const { data, error } = await updateUserProfile(userId, {
+    const newCredits = currentCredits - amount;
+    const updateData = {
       credits_remaining: newCredits,
       updated_at: new Date().toISOString()
-    });
+    };
+    
+    const { data, error } = await updateUserProfile(userId, updateData);
     
     if (error) {
       throw error;

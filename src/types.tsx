@@ -16,6 +16,11 @@ export interface User {
     contacts: number;
   };
   company_name: string;
+  // New fields from updated profiles table
+  username: string;
+  phone: string;
+  email_verified: boolean;
+  phone_verified: boolean;
 }
 
 // New types for CSV Upload
