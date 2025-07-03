@@ -150,6 +150,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const billingCycleStart = metadata.billing_cycle_start ? new Date(metadata.billing_cycle_start) : now;
     const billingCycleEnd = metadata.billing_cycle_end ? new Date(metadata.billing_cycle_end) : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
     
+    // Reconstruct exports_this_month from flattened properties
+    const exportsThisMonth = {
+      companies: metadata.exports_this_month_companies || 0,
+      contacts: metadata.exports_this_month_contacts || 0
+    };
+    
     return {
       id: supabaseUser.id,
       email: supabaseUser.email,
@@ -163,7 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       last_login: new Date(),
       billing_cycle_start: billingCycleStart,
       billing_cycle_end: billingCycleEnd,
-      exports_this_month: metadata.exports_this_month || { companies: 0, contacts: 0 },
+      exports_this_month: exportsThisMonth,
       company_name: metadata.company_name || ''
     };
   };
@@ -208,7 +214,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               subscription_status: 'active',
               billing_cycle_start: billingCycleStart.toISOString(),
               billing_cycle_end: billingCycleEnd.toISOString(),
-              exports_this_month: { companies: 0, contacts: 0 }
+              // Flatten exports_this_month object to avoid nested object issues
+              exports_this_month_companies: 0,
+              exports_this_month_contacts: 0
             }
           }
         });
