@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User } from '../types';
-import { supabase, updateUserMetadata } from '../lib/supabase';
+import { supabase, updateUserMetadata, getUserProfile, createUserProfile, getDefaultCredits } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -68,6 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Get initial session with better error handling
     const initializeAuth = async () => {
       try {
+        console.log('Initializing authentication...');
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -77,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (session?.user) {
+          console.log('Session found, creating user data...');
           const userData = await createUserFromSupabaseUser(session.user);
           setUser(userData);
           
@@ -138,135 +140,111 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const createUserFromSupabaseUser = async (supabaseUser: any): Promise<User> => {
-    // First try to get user data from profiles table with new schema
+    console.log('Creating user from Supabase user:', supabaseUser.email);
+    
+    // Try to get user data from profiles table
     try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select(`
-          user_id,
-          username,
-          email,
-          full_name,
-          role,
-          subscription_tier,
-          subscription_status,
-          credits_remaining,
-          credits_monthly_limit,
-          company_name,
-          billing_cycle_start,
-          billing_cycle_end,
-          last_sign_in_at,
-          email_verified,
-          phone_verified,
-          phone,
-          created_at,
-          updated_at
-        `)
-        .eq('user_id', supabaseUser.id)
-        .single();
+      const { data: profile, error } = await getUserProfile(supabaseUser.id);
 
       if (profile && !error) {
-        // Use profile data with new schema
+        console.log('Profile found in database:', profile);
+        // Use profile data from database
         return {
-          id: profile.user_id || supabaseUser.id,
+          id: supabaseUser.id,
+          user_id: profile.user_id,
           email: profile.email || supabaseUser.email,
           name: profile.full_name || profile.username || supabaseUser.email.split('@')[0],
-          role: profile.role || 'subscriber',
+          username: profile.username || supabaseUser.email.split('@')[0],
+          full_name: profile.full_name,
+          role: profile.is_admin ? 'admin' : (profile.role || 'subscriber'),
+          is_admin: profile.is_admin || false,
           subscription_tier: profile.subscription_tier || 'free',
-          credits_remaining: profile.credits_remaining || getDefaultCredits(profile.subscription_tier || 'free'),
+          credits_remaining: profile.credits_remaining || 0,
           credits_monthly_limit: profile.credits_monthly_limit || getDefaultCredits(profile.subscription_tier || 'free'),
           subscription_status: profile.subscription_status || 'active',
           created_at: new Date(profile.created_at || supabaseUser.created_at),
-          last_login: profile.last_sign_in_at ? new Date(profile.last_sign_in_at) : new Date(),
+          last_login: new Date(),
+          last_sign_in_at: profile.last_sign_in_at ? new Date(profile.last_sign_in_at) : new Date(),
           billing_cycle_start: profile.billing_cycle_start ? new Date(profile.billing_cycle_start) : new Date(),
           billing_cycle_end: profile.billing_cycle_end ? new Date(profile.billing_cycle_end) : new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000),
           exports_this_month: { companies: 0, contacts: 0 },
           company_name: profile.company_name || '',
-          username: profile.username || '',
           phone: profile.phone || '',
           email_verified: profile.email_verified || false,
-          phone_verified: profile.phone_verified || false
+          phone_verified: profile.phone_verified || false,
+          updated_at: profile.updated_at ? new Date(profile.updated_at) : new Date()
         };
       }
     } catch (error) {
-      console.warn('Could not fetch profile from new schema, trying fallback:', error);
+      console.warn('Could not fetch profile from database, will create new one:', error);
     }
 
-    // Fallback to old profiles table structure
-    try {
-      const { data: oldProfile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', supabaseUser.id)
-        .single();
-
-      if (oldProfile && !error) {
-        // Use old profile data structure
-        return {
-          id: oldProfile.id,
-          email: oldProfile.email,
-          name: oldProfile.name || supabaseUser.email.split('@')[0],
-          role: oldProfile.role,
-          subscription_tier: oldProfile.subscription_tier,
-          credits_remaining: oldProfile.credits_remaining,
-          credits_monthly_limit: oldProfile.credits_monthly_limit,
-          subscription_status: oldProfile.subscription_status,
-          created_at: new Date(oldProfile.created_at),
-          last_login: new Date(),
-          billing_cycle_start: new Date(oldProfile.created_at),
-          billing_cycle_end: new Date(new Date(oldProfile.created_at).getTime() + 30 * 24 * 60 * 60 * 1000),
-          exports_this_month: { companies: 0, contacts: 0 },
-          company_name: oldProfile.company_name || '',
-          username: '',
-          phone: '',
-          email_verified: false,
-          phone_verified: false
-        };
-      }
-    } catch (error) {
-      console.warn('Could not fetch old profile structure, falling back to metadata:', error);
-    }
-
-    // Final fallback to user metadata
+    // If no profile exists, create one from user metadata or defaults
     const metadata = supabaseUser.user_metadata || {};
     const isAdmin = supabaseUser.email === 'admin@enrichx.com';
     const role = isAdmin ? 'admin' : (metadata.role || 'subscriber');
     const tier = isAdmin ? 'enterprise' : (metadata.subscription_tier || 'free');
     
-    // Initialize billing cycle if not exists
-    const now = new Date();
-    const billingCycleStart = metadata.billing_cycle_start ? new Date(metadata.billing_cycle_start) : now;
-    const billingCycleEnd = metadata.billing_cycle_end ? new Date(metadata.billing_cycle_end) : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+    console.log('Creating new profile for user:', supabaseUser.email, 'with role:', role, 'tier:', tier);
     
-    return {
-      id: supabaseUser.id,
+    // Create profile in database
+    const profileData = {
       email: supabaseUser.email,
-      name: metadata.name || metadata.full_name || (isAdmin ? 'Admin User' : supabaseUser.email.split('@')[0]),
+      username: metadata.username || supabaseUser.email.split('@')[0],
+      full_name: metadata.full_name || metadata.name || (isAdmin ? 'Admin User' : supabaseUser.email.split('@')[0]),
       role: role,
       subscription_tier: tier,
+      subscription_status: metadata.subscription_status || 'active',
       credits_remaining: metadata.credits_remaining || getDefaultCredits(tier),
       credits_monthly_limit: getDefaultCredits(tier),
-      subscription_status: metadata.subscription_status || 'active',
-      created_at: new Date(supabaseUser.created_at),
-      last_login: new Date(),
-      billing_cycle_start: billingCycleStart,
-      billing_cycle_end: billingCycleEnd,
-      exports_this_month: metadata.exports_this_month || { companies: 0, contacts: 0 },
       company_name: metadata.company_name || '',
-      username: metadata.username || '',
       phone: metadata.phone || '',
       email_verified: supabaseUser.email_confirmed_at ? true : false,
-      phone_verified: supabaseUser.phone_confirmed_at ? true : false
+      phone_verified: supabaseUser.phone_confirmed_at ? true : false,
+      billing_cycle_start: metadata.billing_cycle_start || new Date().toISOString(),
+      billing_cycle_end: metadata.billing_cycle_end || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     };
-  };
 
-  const getDefaultCredits = (tier: string) => {
-    switch (tier) {
-      case 'enterprise': return 10000;
-      case 'pro': return 2000;
-      case 'free': return 50;
-      default: return 50;
+    try {
+      const { data: newProfile, error: createError } = await createUserProfile(supabaseUser.id, profileData);
+      
+      if (createError) {
+        console.error('Error creating profile:', createError);
+        // Continue with fallback data
+      } else {
+        console.log('New profile created successfully:', newProfile);
+      }
+    } catch (error) {
+      console.error('Error creating user profile:', error);
+      // Continue with fallback data
     }
+    
+    // Return user data (either from created profile or fallback)
+    return {
+      id: supabaseUser.id,
+      user_id: supabaseUser.id,
+      email: supabaseUser.email,
+      name: profileData.full_name,
+      username: profileData.username,
+      full_name: profileData.full_name,
+      role: role,
+      is_admin: isAdmin,
+      subscription_tier: tier,
+      credits_remaining: profileData.credits_remaining,
+      credits_monthly_limit: profileData.credits_monthly_limit,
+      subscription_status: profileData.subscription_status,
+      created_at: new Date(supabaseUser.created_at),
+      last_login: new Date(),
+      last_sign_in_at: new Date(),
+      billing_cycle_start: new Date(profileData.billing_cycle_start),
+      billing_cycle_end: new Date(profileData.billing_cycle_end),
+      exports_this_month: { companies: 0, contacts: 0 },
+      company_name: profileData.company_name,
+      phone: profileData.phone,
+      email_verified: profileData.email_verified,
+      phone_verified: profileData.phone_verified,
+      updated_at: new Date()
+    };
   };
 
   const updateUser = (userData: Partial<User>) => {
@@ -277,15 +255,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     
     try {
+      console.log('Starting login process for:', email);
+      
       // If signupData is provided, this is a sign-up attempt
       if (signupData) {
+        console.log('Processing signup...');
         const role = email === 'admin@enrichx.com' ? 'admin' : 'subscriber';
         const tier = email === 'admin@enrichx.com' ? 'enterprise' : signupData.subscriptionTier;
-        
-        // Initialize billing cycle for new users
-        const now = new Date();
-        const billingCycleStart = now;
-        const billingCycleEnd = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
         
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
@@ -293,15 +269,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           options: {
             data: {
               full_name: email === 'admin@enrichx.com' ? 'Admin User' : signupData.name,
-              name: email === 'admin@enrichx.com' ? 'Admin User' : signupData.name,
+              username: email.split('@')[0],
               company_name: signupData.companyName,
               role,
               subscription_tier: tier,
               credits_remaining: getDefaultCredits(tier),
-              subscription_status: 'active',
-              billing_cycle_start: billingCycleStart.toISOString(),
-              billing_cycle_end: billingCycleEnd.toISOString(),
-              exports_this_month: { companies: 0, contacts: 0 }
+              subscription_status: 'active'
             }
           }
         });
@@ -312,12 +285,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         if (signUpData.user) {
+          console.log('Signup successful, creating user data...');
           const userData = await createUserFromSupabaseUser(signUpData.user);
           setUser(userData);
           return userData;
         }
       } else {
         // This is a sign-in attempt
+        console.log('Processing signin...');
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password
@@ -329,23 +304,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         if (signInData.user) {
-          // Update last_sign_in_at in profiles table (try both schema versions)
+          console.log('Signin successful, updating last sign in...');
+          
+          // Update last_sign_in_at in profiles table
           try {
-            // Try new schema first
             await supabase
               .from('profiles')
-              .update({ last_sign_in_at: new Date().toISOString() })
+              .update({ 
+                last_sign_in_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
               .eq('user_id', signInData.user.id);
-          } catch (newSchemaError) {
-            try {
-              // Fallback to old schema
-              await supabase
-                .from('profiles')
-                .update({ last_sign_in_at: new Date().toISOString() })
-                .eq('id', signInData.user.id);
-            } catch (oldSchemaError) {
-              console.warn('Could not update last sign in time:', oldSchemaError);
-            }
+          } catch (updateError) {
+            console.warn('Could not update last sign in time:', updateError);
           }
 
           const userData = await createUserFromSupabaseUser(signInData.user);
@@ -363,6 +334,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
+      console.log('Logging out user...');
+      
       // Clear inactivity timer
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);

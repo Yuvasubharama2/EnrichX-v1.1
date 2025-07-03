@@ -34,7 +34,6 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 export const getCurrentUserTier = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   
-  // Try to get from profiles table first (new schema)
   if (user) {
     try {
       const { data: profile } = await supabase
@@ -47,20 +46,7 @@ export const getCurrentUserTier = async () => {
         return profile.subscription_tier;
       }
     } catch (error) {
-      // Try old schema
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('subscription_tier')
-          .eq('id', user.id)
-          .single();
-        
-        if (profile) {
-          return profile.subscription_tier;
-        }
-      } catch (oldError) {
-        console.warn('Could not fetch user tier from profiles:', oldError);
-      }
+      console.warn('Could not fetch user tier from profiles:', error);
     }
   }
   
@@ -72,33 +58,19 @@ export const getCurrentUserTier = async () => {
 export const getCurrentUserRole = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   
-  // Try to get from profiles table first (new schema)
   if (user) {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, is_admin')
         .eq('user_id', user.id)
         .single();
       
       if (profile) {
-        return profile.role;
+        return profile.is_admin ? 'admin' : profile.role;
       }
     } catch (error) {
-      // Try old schema
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-        
-        if (profile) {
-          return profile.role;
-        }
-      } catch (oldError) {
-        console.warn('Could not fetch user role from profiles:', oldError);
-      }
+      console.warn('Could not fetch user role from profiles:', error);
     }
   }
   
@@ -118,89 +90,51 @@ export const updateUserMetadata = async (metadata: any) => {
   return { data, error };
 };
 
-// Helper function to update user profile (supports both schema versions)
+// Helper function to update user profile
 export const updateUserProfile = async (userId: string, profileData: any) => {
-  // Try new schema first
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(profileData)
-      .eq('user_id', userId)
-      .select()
-      .single();
-    
-    if (!error) {
-      return { data, error };
-    }
-  } catch (newSchemaError) {
-    console.warn('New schema update failed, trying old schema:', newSchemaError);
-  }
-
-  // Fallback to old schema
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(profileData)
-      .eq('id', userId)
-      .select()
-      .single();
-    
-    return { data, error };
-  } catch (oldSchemaError) {
-    console.error('Both schema updates failed:', oldSchemaError);
-    return { data: null, error: oldSchemaError };
-  }
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({
+      ...profileData,
+      updated_at: new Date().toISOString()
+    })
+    .eq('user_id', userId)
+    .select()
+    .single();
+  
+  return { data, error };
 };
 
-// Helper function to get user profile (supports both schema versions)
+// Helper function to get user profile
 export const getUserProfile = async (userId: string) => {
-  // Try new schema first
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select(`
-        user_id,
-        username,
-        email,
-        full_name,
-        role,
-        subscription_tier,
-        subscription_status,
-        credits_remaining,
-        credits_monthly_limit,
-        company_name,
-        billing_cycle_start,
-        billing_cycle_end,
-        last_sign_in_at,
-        email_verified,
-        phone_verified,
-        phone,
-        created_at,
-        updated_at
-      `)
-      .eq('user_id', userId)
-      .single();
-    
-    if (!error && data) {
-      return { data, error };
-    }
-  } catch (newSchemaError) {
-    console.warn('New schema fetch failed, trying old schema:', newSchemaError);
-  }
-
-  // Fallback to old schema
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    
-    return { data, error };
-  } catch (oldSchemaError) {
-    console.error('Both schema fetches failed:', oldSchemaError);
-    return { data: null, error: oldSchemaError };
-  }
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(`
+      id,
+      user_id,
+      username,
+      email,
+      full_name,
+      role,
+      is_admin,
+      subscription_tier,
+      subscription_status,
+      credits_remaining,
+      credits_monthly_limit,
+      company_name,
+      billing_cycle_start,
+      billing_cycle_end,
+      last_sign_in_at,
+      email_verified,
+      phone_verified,
+      phone,
+      created_at,
+      updated_at
+    `)
+    .eq('user_id', userId)
+    .single();
+  
+  return { data, error };
 };
 
 // Helper function to check if user is admin
@@ -209,7 +143,7 @@ export const isUserAdmin = async () => {
   return role === 'admin';
 };
 
-// Helper function to deduct credits from user (supports both schema versions)
+// Helper function to deduct credits from user
 export const deductUserCredits = async (userId: string, amount: number = 1) => {
   try {
     // Get current credits
@@ -226,12 +160,9 @@ export const deductUserCredits = async (userId: string, amount: number = 1) => {
     
     // Deduct credits
     const newCredits = currentCredits - amount;
-    const updateData = {
-      credits_remaining: newCredits,
-      updated_at: new Date().toISOString()
-    };
-    
-    const { data, error } = await updateUserProfile(userId, updateData);
+    const { data, error } = await updateUserProfile(userId, {
+      credits_remaining: newCredits
+    });
     
     if (error) {
       throw error;
@@ -241,5 +172,45 @@ export const deductUserCredits = async (userId: string, amount: number = 1) => {
   } catch (error) {
     console.error('Error deducting credits:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};
+
+// Helper function to create or update user profile
+export const createUserProfile = async (userId: string, userData: any) => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert({
+      user_id: userId,
+      email: userData.email,
+      username: userData.username || userData.email.split('@')[0],
+      full_name: userData.full_name || userData.name,
+      role: userData.role || 'subscriber',
+      is_admin: userData.role === 'admin',
+      subscription_tier: userData.subscription_tier || 'free',
+      subscription_status: userData.subscription_status || 'active',
+      credits_remaining: userData.credits_remaining || getDefaultCredits(userData.subscription_tier || 'free'),
+      credits_monthly_limit: userData.credits_monthly_limit || getDefaultCredits(userData.subscription_tier || 'free'),
+      company_name: userData.company_name || '',
+      phone: userData.phone || '',
+      email_verified: userData.email_verified || false,
+      phone_verified: userData.phone_verified || false,
+      billing_cycle_start: userData.billing_cycle_start || new Date().toISOString(),
+      billing_cycle_end: userData.billing_cycle_end || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .select()
+    .single();
+  
+  return { data, error };
+};
+
+// Helper function to get default credits based on tier
+export const getDefaultCredits = (tier: string) => {
+  switch (tier) {
+    case 'enterprise': return 10000;
+    case 'pro': return 2000;
+    case 'free': return 50;
+    default: return 50;
   }
 };
