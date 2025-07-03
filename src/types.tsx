@@ -1,19 +1,14 @@
 export interface User {
   id: string;
-  user_id?: string; // New field from updated schema
   email: string;
   name: string;
-  username: string; // New field
-  full_name?: string; // New field
   role: 'admin' | 'subscriber';
-  is_admin?: boolean; // New field
   subscription_tier: 'free' | 'pro' | 'enterprise';
   credits_remaining: number;
   credits_monthly_limit: number;
   subscription_status: 'active' | 'canceled' | 'past_due';
   created_at: Date;
   last_login: Date;
-  last_sign_in_at?: Date; // New field
   billing_cycle_start: Date;
   billing_cycle_end: Date;
   exports_this_month: {
@@ -21,10 +16,6 @@ export interface User {
     contacts: number;
   };
   company_name: string;
-  phone: string; // New field
-  email_verified: boolean; // New field
-  phone_verified: boolean; // New field
-  updated_at?: Date; // New field
 }
 
 // New types for CSV Upload

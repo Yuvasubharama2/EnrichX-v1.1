@@ -18,25 +18,19 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
   const [subscriptionTier, setSubscriptionTier] = useState('pro');
   const [showDashboardChoice, setShowDashboardChoice] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setIsSubmitting(true);
     
     try {
-      console.log('Starting authentication process...');
-      
       const result = await login(email, password, isSignUp ? { 
         subscriptionTier, 
         name: name || email.split('@')[0], 
         companyName 
       } : undefined);
-      
-      console.log('Authentication result:', result);
       
       // Check if this is admin login (not signup) and show dashboard choice
       if (email === 'admin@enrichx.com' && !isSignUp && result?.role === 'admin') {
@@ -50,27 +44,7 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
       }
     } catch (error: any) {
       console.error('Authentication failed:', error);
-      
-      // Provide more specific error messages
-      let errorMessage = 'Authentication failed. Please try again.';
-      
-      if (error.message?.includes('Invalid login credentials')) {
-        errorMessage = 'Invalid email or password. Please check your credentials and try again.';
-      } else if (error.message?.includes('Email not confirmed')) {
-        errorMessage = 'Please check your email and click the confirmation link before signing in.';
-      } else if (error.message?.includes('User already registered')) {
-        errorMessage = 'An account with this email already exists. Please sign in instead.';
-      } else if (error.message?.includes('Database error')) {
-        errorMessage = 'Database connection error. Please try again in a moment.';
-      } else if (error.message?.includes('signup disabled')) {
-        errorMessage = 'New user registration is currently disabled. Please contact support.';
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      setError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
+      setError(error.message || 'Authentication failed. Please try again.');
     }
   };
 
@@ -160,7 +134,7 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
         {/* Login Form */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
@@ -301,10 +275,10 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
 
             <button
               type="submit"
-              disabled={isLoading || isSubmitting}
+              disabled={isLoading}
               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
-              {isLoading || isSubmitting ? (
+              {isLoading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 isSignUp ? 'Create Account' : 'Sign In'
