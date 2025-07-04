@@ -307,6 +307,7 @@ BEGIN
     END;
   END IF;
 
+
   -- Insert profile
   INSERT INTO public.profiles (
     id,
