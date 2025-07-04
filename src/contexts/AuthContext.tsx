@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { User } from '../types';
-import { supabase, updateUserMetadata } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -24,14 +24,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const lastActivityRef = useRef<number>(Date.now());
 
-  // Inactivity timeout (30 minutes for better UX)
-  const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
+  // Inactivity timeout (30 minutes)
+  const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
 
   const resetInactivityTimer = () => {
-    lastActivityRef.current = Date.now();
-    
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current);
     }
@@ -65,7 +62,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cleanupActivityListeners: (() => void) | null = null;
 
-    // Get initial session with better error handling
     const initializeAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -77,16 +73,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (session?.user) {
-          const userData = createUserFromSupabaseUser(session.user);
+          const userData = await createUserFromSupabaseUser(session.user);
           setUser(userData);
           
-          // Setup activity monitoring for logged-in users
           cleanupActivityListeners = setupActivityListeners();
           resetInactivityTimer();
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
-        // Don't throw error, just log it and continue
       } finally {
         setIsLoading(false);
       }
@@ -94,16 +88,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initializeAuth();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email);
         
         if (session?.user) {
-          const userData = createUserFromSupabaseUser(session.user);
+          const userData = await createUserFromSupabaseUser(session.user);
           setUser(userData);
           
-          // Setup activity monitoring for newly logged-in users
           if (!cleanupActivityListeners) {
             cleanupActivityListeners = setupActivityListeners();
           }
@@ -111,7 +103,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           setUser(null);
           
-          // Clean up activity listeners when user logs out
           if (cleanupActivityListeners) {
             cleanupActivityListeners();
             cleanupActivityListeners = null;
@@ -137,50 +128,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const createUserFromSupabaseUser = (supabaseUser: any): User => {
+  const createUserFromSupabaseUser = async (supabaseUser: any): Promise<User> => {
+    try {
+      // Fetch user profile from profiles table
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', supabaseUser.id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching user profile:', error);
+        // Fallback to metadata if profile doesn't exist
+        return createUserFromMetadata(supabaseUser);
+      }
+
+      return {
+        id: profile.id,
+        email: profile.email,
+        name: profile.name,
+        role: profile.role,
+        subscription_tier: profile.subscription_tier,
+        credits_remaining: profile.credits_remaining,
+        credits_monthly_limit: profile.credits_monthly_limit,
+        subscription_status: profile.subscription_status,
+        created_at: new Date(profile.created_at),
+        last_login: new Date(),
+        billing_cycle_start: new Date(),
+        billing_cycle_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+        exports_this_month: {
+          companies: 0,
+          contacts: 0
+        },
+        company_name: profile.company_name || ''
+      };
+    } catch (error) {
+      console.error('Error creating user from Supabase user:', error);
+      return createUserFromMetadata(supabaseUser);
+    }
+  };
+
+  const createUserFromMetadata = (supabaseUser: any): User => {
     const metadata = supabaseUser.user_metadata || {};
-    
-    // Special handling for admin@enrichx.com
     const isAdmin = supabaseUser.email === 'admin@enrichx.com';
-    const role = isAdmin ? 'admin' : (metadata.role || 'subscriber');
-    const tier = isAdmin ? 'enterprise' : (metadata.subscription_tier || 'free');
-    
-    // Initialize billing cycle if not exists
-    const now = new Date();
-    const billingCycleStart = metadata.billing_cycle_start ? new Date(metadata.billing_cycle_start) : now;
-    const billingCycleEnd = metadata.billing_cycle_end ? new Date(metadata.billing_cycle_end) : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
-    
-    // Reconstruct exports_this_month from flattened properties
-    const exportsThisMonth = {
-      companies: metadata.exports_this_month_companies || 0,
-      contacts: metadata.exports_this_month_contacts || 0
-    };
     
     return {
       id: supabaseUser.id,
       email: supabaseUser.email,
       name: metadata.name || (isAdmin ? 'Admin User' : supabaseUser.email.split('@')[0]),
-      role: role,
-      subscription_tier: tier,
-      credits_remaining: metadata.credits_remaining || getDefaultCredits(tier),
-      credits_monthly_limit: getDefaultCredits(tier),
+      role: isAdmin ? 'admin' : (metadata.role || 'subscriber'),
+      subscription_tier: isAdmin ? 'enterprise' : (metadata.subscription_tier || 'free'),
+      credits_remaining: metadata.credits_remaining || (isAdmin ? 10000 : 50),
+      credits_monthly_limit: isAdmin ? 10000 : 50,
       subscription_status: metadata.subscription_status || 'active',
       created_at: new Date(supabaseUser.created_at),
       last_login: new Date(),
-      billing_cycle_start: billingCycleStart,
-      billing_cycle_end: billingCycleEnd,
-      exports_this_month: exportsThisMonth,
+      billing_cycle_start: new Date(),
+      billing_cycle_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      exports_this_month: {
+        companies: 0,
+        contacts: 0
+      },
       company_name: metadata.company_name || ''
     };
-  };
-
-  const getDefaultCredits = (tier: string) => {
-    switch (tier) {
-      case 'enterprise': return 10000;
-      case 'pro': return 2000;
-      case 'free': return 50;
-      default: return 50;
-    }
   };
 
   const updateUser = (userData: Partial<User>) => {
@@ -191,32 +201,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     
     try {
-      // If signupData is provided, this is a sign-up attempt
       if (signupData) {
-        const role = email === 'admin@enrichx.com' ? 'admin' : 'subscriber';
-        const tier = email === 'admin@enrichx.com' ? 'enterprise' : signupData.subscriptionTier;
-        
-        // Initialize billing cycle for new users
-        const now = new Date();
-        const billingCycleStart = now;
-        const billingCycleEnd = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
-        
+        // Sign up
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
-              name: email === 'admin@enrichx.com' ? 'Admin User' : signupData.name,
+              name: signupData.name,
               company_name: signupData.companyName,
-              role,
-              subscription_tier: tier,
-              credits_remaining: getDefaultCredits(tier),
-              subscription_status: 'active',
-              billing_cycle_start: billingCycleStart.toISOString(),
-              billing_cycle_end: billingCycleEnd.toISOString(),
-              // Flatten exports_this_month object to avoid nested object issues
-              exports_this_month_companies: 0,
-              exports_this_month_contacts: 0
+              subscription_tier: signupData.subscriptionTier,
+              role: email === 'admin@enrichx.com' ? 'admin' : 'subscriber'
             }
           }
         });
@@ -224,12 +219,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (signUpError) throw signUpError;
         
         if (signUpData.user) {
-          const userData = createUserFromSupabaseUser(signUpData.user);
+          const userData = await createUserFromSupabaseUser(signUpData.user);
           setUser(userData);
           return userData;
         }
       } else {
-        // This is a sign-in attempt
+        // Sign in
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password
@@ -238,17 +233,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (signInError) throw signInError;
         
         if (signInData.user) {
-          // Update metadata for admin if needed
-          if (email === 'admin@enrichx.com') {
-            await updateUserMetadata({
-              role: 'admin',
-              subscription_tier: 'enterprise',
-              credits_remaining: 10000,
-              name: 'Admin User'
-            });
-          }
-          
-          const userData = createUserFromSupabaseUser(signInData.user);
+          const userData = await createUserFromSupabaseUser(signInData.user);
           setUser(userData);
           return userData;
         }
@@ -263,25 +248,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      // Clear inactivity timer
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
         inactivityTimerRef.current = null;
       }
 
-      // Sign out from Supabase
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('Error signing out:', error);
       }
       
-      // Clear user state
       setUser(null);
-      
       console.log('User successfully logged out');
     } catch (error) {
       console.error('Logout error:', error);
-      // Even if there's an error, clear the user state
       setUser(null);
     }
   };
