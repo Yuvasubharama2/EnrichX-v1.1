@@ -857,3 +857,45 @@ export default function AdminUserManagementPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
 </div>
+  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
+                    <input
+                      type="text"
+                      value={editForm.company_name}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, company_name: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+                    <select
+                      value={editForm.role}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, role: e.target.value as 'admin' | 'subscriber' }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={editingUser.email === 'admin@enrichx.com'}
+                    >
+                      <option value="subscriber">Subscriber</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+    <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Subscription Tier</label>
+                    <select
+                      value={editForm.subscription_tier}
+                      onChange={(e) => {
+                        const tier = e.target.value as 'free' | 'pro' | 'enterprise';
+                        const credits = tier === 'enterprise' ? 10000 : tier === 'pro' ? 2000 : 50;
+                        setEditForm(prev => ({ 
+                          ...prev, 
+                          subscription_tier: tier,
+                          credits_monthly_limit: credits,
+                          credits_remaining: credits
+                        }));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="free">Free (50 credits)</option>
+                      <option value="pro">Pro (2,000 credits)</option>
+                      <option value="enterprise">Enterprise (10,000 credits)</option>
+                    </select>
+                  </div>
