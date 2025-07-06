@@ -28,6 +28,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Inactivity timeout (30 minutes)
   const INACTIVITY_TIMEOUT = 30 * 60 * 1000;
 
+  // Helper function to get default credits based on tier
+  const getDefaultCredits = (tier: string): number => {
+    switch (tier) {
+      case 'enterprise':
+        return 10000;
+      case 'pro':
+        return 2000;
+      default:
+        return 50;
+    }
+  };
+
   const resetInactivityTimer = () => {
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current);
@@ -130,40 +142,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const createUserFromSupabaseUser = async (supabaseUser: any): Promise<User> => {
     try {
-      // Fetch user profile from profiles table
+      // First, try to fetch user profile from profiles table
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', supabaseUser.id)
         .single();
 
-      if (error) {
-        console.error('Error fetching user profile:', error);
-        // Fallback to metadata if profile doesn't exist
+      if (!error && profile) {
+        // Profile exists, use it
+        return {
+          id: profile.id,
+          email: profile.email,
+          name: profile.name,
+          role: profile.role,
+          subscription_tier: profile.subscription_tier,
+          credits_remaining: profile.credits_remaining,
+          credits_monthly_limit: profile.credits_monthly_limit,
+          subscription_status: profile.subscription_status,
+          created_at: new Date(profile.created_at),
+          last_login: new Date(),
+          billing_cycle_start: new Date(),
+          billing_cycle_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+          exports_this_month: {
+            companies: 0,
+            contacts: 0
+          },
+          company_name: profile.company_name || ''
+        };
+      } else {
+        console.log('Profile not found, creating from metadata:', error);
+        // Profile doesn't exist, create from metadata
         return createUserFromMetadata(supabaseUser);
       }
-
-      return {
-        id: profile.id,
-        email: profile.email,
-        name: profile.name,
-        role: profile.role,
-        subscription_tier: profile.subscription_tier,
-        credits_remaining: profile.credits_remaining,
-        credits_monthly_limit: profile.credits_monthly_limit,
-        subscription_status: profile.subscription_status,
-        created_at: new Date(profile.created_at),
-        last_login: new Date(),
-        billing_cycle_start: new Date(),
-        billing_cycle_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-        exports_this_month: {
-          companies: 0,
-          contacts: 0
-        },
-        company_name: profile.company_name || ''
-      };
     } catch (error) {
-      console.error('Error creating user from Supabase user:', error);
+      console.error('Error fetching user profile:', error);
+      // Fallback to metadata if profile fetch fails
       return createUserFromMetadata(supabaseUser);
     }
   };
@@ -172,14 +186,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const metadata = supabaseUser.user_metadata || {};
     const isAdmin = supabaseUser.email === 'admin@enrichx.com';
     
+    // Extract subscription tier from various possible field names
+    const subscriptionTier = metadata.subscription_tier || 
+                           metadata.subscriptionTier || 
+                           metadata.tier || 
+                           (isAdmin ? 'enterprise' : 'free');
+    
+    const defaultCredits = isAdmin ? 10000 : getDefaultCredits(subscriptionTier);
+    
     return {
       id: supabaseUser.id,
       email: supabaseUser.email,
       name: metadata.name || (isAdmin ? 'Admin User' : supabaseUser.email.split('@')[0]),
       role: isAdmin ? 'admin' : (metadata.role || 'subscriber'),
-      subscription_tier: isAdmin ? 'enterprise' : (metadata.subscription_tier || 'free'),
-      credits_remaining: metadata.credits_remaining || (isAdmin ? 10000 : 50),
-      credits_monthly_limit: isAdmin ? 10000 : 50,
+      subscription_tier: subscriptionTier,
+      credits_remaining: metadata.credits_remaining || defaultCredits,
+      credits_monthly_limit: defaultCredits,
       subscription_status: metadata.subscription_status || 'active',
       created_at: new Date(supabaseUser.created_at),
       last_login: new Date(),
@@ -189,7 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         companies: 0,
         contacts: 0
       },
-      company_name: metadata.company_name || ''
+      company_name: metadata.company_name || metadata.companyName || ''
     };
   };
 
@@ -210,7 +232,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             data: {
               name: signupData.name,
               company_name: signupData.companyName,
+              companyName: signupData.companyName, // Also store with camelCase for compatibility
               subscription_tier: signupData.subscriptionTier,
+              subscriptionTier: signupData.subscriptionTier, // Also store with camelCase for compatibility
+              tier: signupData.subscriptionTier, // Also store as 'tier' for compatibility
               role: email === 'admin@enrichx.com' ? 'admin' : 'subscriber'
             }
           }
@@ -219,6 +244,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (signUpError) throw signUpError;
         
         if (signUpData.user) {
+          // Explicitly create the profile using the RPC function
+          try {
+            const { error: rpcError } = await supabase.rpc('create_user_profile_manual', {
+              user_id: signUpData.user.id,
+              user_email: email,
+              user_metadata: {
+                name: signupData.name,
+                company_name: signupData.companyName,
+                companyName: signupData.companyName,
+                subscription_tier: signupData.subscriptionTier,
+                subscriptionTier: signupData.subscriptionTier,
+                tier: signupData.subscriptionTier,
+                role: email === 'admin@enrichx.com' ? 'admin' : 'subscriber'
+              }
+            });
+            
+            if (rpcError) {
+              console.error('Error creating profile via RPC:', rpcError);
+            } else {
+              console.log('Profile created successfully via RPC');
+            }
+          } catch (rpcError) {
+            console.error('RPC call failed:', rpcError);
+          }
+          
           const userData = await createUserFromSupabaseUser(signUpData.user);
           setUser(userData);
           return userData;
