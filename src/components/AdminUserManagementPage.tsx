@@ -899,3 +899,13 @@ export default function AdminUserManagementPage() {
                       <option value="enterprise">Enterprise (10,000 credits)</option>
                     </select>
                   </div>
+    <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Credits Remaining</label>
+                      <input
+                        type="number"
+                        value={editForm.credits_remaining}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, credits_remaining: parseInt(e.target.value) || 0 }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
