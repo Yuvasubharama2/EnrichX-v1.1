@@ -23,7 +23,7 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading) return;
+     setError(null);
     
     try {
       const result = await login(email, password, isSignUp ? { 
