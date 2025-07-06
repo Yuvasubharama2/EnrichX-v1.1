@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, Eye, EyeOff, Settings, Download
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
 
 interface UserData {
   id: string;
