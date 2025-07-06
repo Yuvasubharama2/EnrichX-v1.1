@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Users, Search, Filter, Shield, CreditCard, Edit3, Trash2, Plus, 
@@ -849,17 +848,7 @@ export default function AdminUserManagementPage() {
                       />
                     </div>
                     <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-2">
-Monthly Limit</label>
-    <input
-                        type="number"
-                        value={editForm.credits_remaining}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, credits_remaining: parseInt(e.target.value) || 0 }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Monthly Limit</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Credits Monthly Limit</label>
                       <input
                         type="number"
                         value={editForm.credits_monthly_limit}
@@ -870,7 +859,7 @@ Monthly Limit</label>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Subscription Status</label>
                     <select
                       value={editForm.subscription_status}
                       onChange={(e) => setEditForm(prev => ({ ...prev, subscription_status: e.target.value as 'active' | 'canceled' | 'past_due' }))}
@@ -883,20 +872,20 @@ Monthly Limit</label>
                   </div>
                 </div>
               </div>
-              
               <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <button
+                  type="button"
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
                   onClick={handleUpdateUser}
-                  className="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   <Check className="w-4 h-4 mr-2" />
                   Update User
                 </button>
                 <button
+                  type="button"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   onClick={() => setShowEditModal(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                 >
-                  <X className="w-4 h-4 mr-2" />
                   Cancel
                 </button>
               </div>
@@ -914,70 +903,53 @@ Monthly Limit</label>
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="flex items-center mb-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-3 ${
-                    isUserBanned(banningUser) ? 'bg-green-100' : 'bg-red-100'
-                  }`}>
-                    {isUserBanned(banningUser) ? (
-                      <UserCheck className="w-5 h-5 text-green-600" />
-                    ) : (
-                      <Ban className="w-5 h-5 text-red-600" />
-                    )}
+                  <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                    <Ban className="w-5 h-5 text-red-600" />
                   </div>
                   <h3 className="text-lg font-medium text-gray-900">
                     {isUserBanned(banningUser) ? 'Unban User' : 'Ban User'}
                   </h3>
                 </div>
                 
-                <div className="mb-4">
+                <div className="space-y-4">
                   <p className="text-sm text-gray-600">
-                    {isUserBanned(banningUser) 
-                      ? `Are you sure you want to unban ${banningUser.name}?`
-                      : `Are you sure you want to ban ${banningUser.name}?`
+                    {isUserBanned(banningUser)
+                      ? `Are you sure you want to unban ${banningUser.name} (${banningUser.email})? This will restore their access.`
+                      : `Are you sure you want to ban ${banningUser.name} (${banningUser.email})? You can specify an end date.`
                     }
                   </p>
+                  {!isUserBanned(banningUser) && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Ban Until (Optional)</label>
+                      <input
+                        type="date"
+                        value={banUntilDate}
+                        onChange={(e) => setBanUntilDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Leave blank to unban or ban indefinitely.</p>
+                    </div>
+                  )}
                 </div>
-
-                {!isUserBanned(banningUser) && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Ban Until (optional - leave empty for permanent ban)
-                    </label>
-                    <input
-                      type="datetime-local"
-                      value={banUntilDate}
-                      onChange={(e) => setBanUntilDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    />
-                  </div>
-                )}
               </div>
-              
               <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <button
-                  onClick={handleConfirmBan}
-                  className={`w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm ${
+                  type="button"
+                  className={`w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm ${
                     isUserBanned(banningUser)
                       ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
                       : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
                   }`}
+                  onClick={handleConfirmBan}
                 >
-                  {isUserBanned(banningUser) ? (
-                    <>
-                      <UserCheck className="w-4 h-4 mr-2" />
-                      Unban User
-                    </>
-                  ) : (
-                    <>
-                      <Ban className="w-4 h-4 mr-2" />
-                      Ban User
-                    </>
-                  )}
+                  {isUserBanned(banningUser) ? <UserCheck className="w-4 h-4 mr-2" /> : <Ban className="w-4 h-4 mr-2" />}
+                  {isUserBanned(banningUser) ? 'Confirm Unban' : 'Confirm Ban'}
                 </button>
                 <button
+                  type="button"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                   onClick={() => setShowBanModal(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                 >
-                  <X className="w-4 h-4 mr-2" />
                   Cancel
                 </button>
               </div>
