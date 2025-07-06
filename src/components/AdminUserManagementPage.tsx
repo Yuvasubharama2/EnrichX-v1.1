@@ -851,3 +851,10 @@ export default function AdminUserManagementPage() {
                     <div>
                      <label className="block text-sm font-medium text-gray-700 mb-2">
 Monthly Limit</label>
+ <input
+                        type="number"
+                        value={editForm.credits_monthly_limit}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, credits_monthly_limit: parseInt(e.target.value) || 0 }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
