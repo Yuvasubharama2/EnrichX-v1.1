@@ -892,7 +892,6 @@ export default function AdminUserManagementPage() {
               </div>
             </div>
           </div>
-        </div>
       )}
   );
 }
