@@ -94,7 +94,7 @@ export default function AdminLayout({ children, activeTab, onTabChange }: AdminL
           </ul>
         </nav>
 
-        {/* Bottom section */}
+        {/* Bottom section with enhanced signout */}
         <div className="p-4 border-t border-gray-200 bg-gray-50">
           <div className="flex items-center space-x-3 mb-4">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
@@ -105,19 +105,21 @@ export default function AdminLayout({ children, activeTab, onTabChange }: AdminL
               <p className="text-xs text-gray-500 truncate">{user?.email || 'admin@enrichx.com'}</p>
             </div>
           </div>
+          
+          {/* Enhanced Sign Out Button */}
           <button 
             onClick={handleSignOut}
-            className="w-full flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            className="w-full flex items-center px-4 py-3 text-white bg-gradient-to-r from-red-500 to-red-600 rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105"
           >
             <LogOut className="w-4 h-4 mr-3" />
-            <span className="text-sm">Sign out</span>
+            <span className="text-sm font-medium">Sign Out</span>
           </button>
         </div>
       </div>
 
       {/* Main content area */}
       <div className="flex flex-col flex-grow">
-        {/* Top header */}
+        {/* Top header with additional signout option */}
         <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <button
@@ -140,12 +142,15 @@ export default function AdminLayout({ children, activeTab, onTabChange }: AdminL
                   {user?.subscription_status}
                 </span>
               </div>
+              
+              {/* Header Sign Out Button */}
               <button
                 onClick={handleSignOut}
-                className="p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                className="flex items-center px-3 py-2 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 hover:text-red-700 transition-colors"
                 title="Sign out"
               >
-                <LogOut className="w-5 h-5" />
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
               </button>
             </div>
           </div>
