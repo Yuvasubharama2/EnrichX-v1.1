@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { useSupabaseClient, useSession } from '@supabase/auth-helpers-react';
 import { 
   Users, Search, Filter, Shield, CreditCard, Edit3, Trash2, Plus, 
   Check, X, Crown, User, Building2, Calendar, Mail, Phone, Ban, 
