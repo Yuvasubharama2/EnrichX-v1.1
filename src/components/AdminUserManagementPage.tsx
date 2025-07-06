@@ -890,7 +890,6 @@ export default function AdminUserManagementPage() {
                   Cancel
                 </button>
               </div>
-            </div>
       )}
   );
 }
