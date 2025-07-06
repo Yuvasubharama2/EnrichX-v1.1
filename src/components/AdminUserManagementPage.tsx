@@ -43,6 +43,7 @@ interface FilterState {
 
 export default function AdminUserManagementPage() {
   const { user } = useAuth();
+  const supabase = useSupabaseClient();
   const [users, setUsers] = useState<UserData[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,6 +59,7 @@ export default function AdminUserManagementPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [error, setError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<FilterState>({
     role: [],
@@ -81,12 +83,21 @@ export default function AdminUserManagementPage() {
       fetchUsers();
       fetchStats();
     }
-  }, [user, currentPage, searchQuery, sortBy, sortOrder]);
+  }, [user, currentPage, searchQuery, sortBy, sortOrder, filters]); // Added filters to dependencies
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const token = (await import('../lib/supabase')).supabase.auth.session()?.access_token;
+      setError(null);
+      
+      // Get the current session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('No active session');
+      }
+      
+      const token = session.access_token;
       
       const params = new URLSearchParams({
         page: currentPage.toString(),
@@ -96,7 +107,22 @@ export default function AdminUserManagementPage() {
         sortOrder
       });
 
-      const response = await fetch(`/functions/v1/admin-user-management/users?${params}`, {
+      // Add filters to params
+      if (filters.role.length > 0) {
+        params.append('roles', filters.role.join(','));
+      }
+      if (filters.subscription_tier.length > 0) {
+        params.append('tiers', filters.subscription_tier.join(','));
+      }
+      if (filters.subscription_status.length > 0) {
+        params.append('statuses', filters.subscription_status.join(','));
+      }
+      if (filters.banned_status.length > 0) {
+        params.append('bannedStatuses', filters.banned_status.join(','));
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-user-management/users?${params}`, {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -104,14 +130,17 @@ export default function AdminUserManagementPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch users');
+        const errorData = await response.json();
+        console.error('API error:', errorData);
+        throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
       setUsers(data.users);
       setTotalPages(data.totalPages);
-    } catch (error) {
-      console.error('Error fetching users:', error);
+    } catch (err: any) { // Explicitly type err as any to avoid TS errors with err.message
+      console.error('Error fetching users:', err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -119,9 +148,17 @@ export default function AdminUserManagementPage() {
 
   const fetchStats = async () => {
     try {
-      const token = (await import('../lib/supabase')).supabase.auth.session()?.access_token;
+      // Get the current session
+      const { data: { session } } = await supabase.auth.getSession();
       
-      const response = await fetch('/functions/v1/admin-user-management/stats', {
+      if (!session) {
+        throw new Error('No active session');
+      }
+      
+      const token = session.access_token;
+      
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-user-management/stats`, {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -129,13 +166,14 @@ export default function AdminUserManagementPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch stats');
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
       setStats(data);
-    } catch (error) {
-      console.error('Error fetching stats:', error);
+    } catch (err) {
+      console.error('Error fetching stats:', err);
     }
   };
 
@@ -157,9 +195,16 @@ export default function AdminUserManagementPage() {
     if (!editingUser) return;
 
     try {
-      const token = (await import('../lib/supabase')).supabase.auth.session()?.access_token;
+      // Get the current session
+      const { data: { session } } = await supabase.auth.getSession();
       
-      const response = await fetch(`/functions/v1/admin-user-management/users/${editingUser.id}`, {
+      if (!session) {
+        throw new Error('No active session');
+      }
+      
+      const token = session.access_token;
+      
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-user-management/users/${editingUser.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -192,15 +237,23 @@ export default function AdminUserManagementPage() {
     if (!banningUser) return;
 
     try {
-      const token = (await import('../lib/supabase')).supabase.auth.session()?.access_token;
+      // Get the current session
+      const { data: { session } } = await supabase.auth.getSession();
       
-      const response = await fetch(`/functions/v1/admin-user-management/users/${banningUser.id}/ban`, {
+      if (!session) {
+        throw new Error('No active session');
+      }
+      
+      const token = session.access_token;
+      
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-user-management/ban`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          user_id: banningUser.id,
           banUntil: banUntilDate || null
         })
       });
@@ -290,6 +343,25 @@ export default function AdminUserManagementPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Error</h3>
+          <p className="text-gray-600">{error}</p>
+          <button 
+            onClick={() => { fetchUsers(); fetchStats(); }}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <RefreshCw className="w-4 h-4 mr-2 inline" />
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
