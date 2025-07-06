@@ -889,7 +889,6 @@ export default function AdminUserManagementPage() {
                   <X className="w-4 h-4 mr-2" />
                   Cancel
                 </button>
-              </div>
       )}
   );
 }
