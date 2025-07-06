@@ -850,4 +850,3 @@ export default function AdminUserManagementPage() {
                     </div>
                     <div>
                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Ban Until (optional - leave empty for permanent ban)
