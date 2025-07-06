@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (user) {
       inactivityTimerRef.current = setTimeout(() => {
-        console.log('User inactive for 30 minutes, logging out...');
+        console.log('User inactive for 1 minutes, logging out...');
         logout();
       }, INACTIVITY_TIMEOUT);
     }
