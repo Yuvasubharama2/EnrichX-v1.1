@@ -858,3 +858,15 @@ Monthly Limit</label>
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
+ <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select
+                      value={editForm.subscription_status}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, subscription_status: e.target.value as 'active' | 'canceled' | 'past_due' }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="active">Active</option>
+                      <option value="canceled">Canceled</option>
+                      <option value="past_due">Past Due</option>
+                    </select>
+                  </div>
