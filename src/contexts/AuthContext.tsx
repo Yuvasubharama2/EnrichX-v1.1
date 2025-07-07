@@ -67,12 +67,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const session = data?.session;
 
-        if (session?.user) {
-          const userData = await createUserFromSupabaseUser(session.user);
-          setUser(userData);
-          cleanupActivityListeners = setupActivityListeners();
-          resetInactivityTimer();
-        }
+       if (session?.user) {
+  const userData = await createUserFromSupabaseUser(session.user);
+  setUser(userData);
+  cleanupActivityListeners = setupActivityListeners();
+  resetInactivityTimer();
+} else {
+  setUser(null); // <--- Important: prevent infinite loading
+}
+
       } catch (err) {
         console.error('Error initializing auth:', err);
       } finally {
