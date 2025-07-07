@@ -25,7 +25,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const INACTIVITY_TIMEOUT = 60 * 1000; // 1 minute
+  const INACTIVITY_TIMEOUT = 30 * 1000; // 1 minute
 
   const getDefaultCredits = (tier: string): number => {
     switch (tier) {
