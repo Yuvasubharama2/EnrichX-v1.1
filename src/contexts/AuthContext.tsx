@@ -62,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (error) {
           console.error('Error getting session:', error);
+          setIsLoading(false); 
           return;
         }
 
