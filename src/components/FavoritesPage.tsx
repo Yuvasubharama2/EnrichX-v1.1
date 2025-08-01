@@ -92,13 +92,11 @@ export default function FavoritesPage() {
       // Deduct 1 credit from user
       const newCredits = user.credits_remaining - 1;
       
-      // Update user metadata in Supabase
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          ...user,
-          credits_remaining: newCredits
-        }
-      });
+      // Update user profile in the profiles table
+      const { error } = await supabase
+        .from('profiles')
+        .update({ credits_remaining: newCredits })
+        .eq('id', user.id);
 
       if (error) throw error;
 
