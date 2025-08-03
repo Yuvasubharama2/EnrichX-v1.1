@@ -62,25 +62,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (error) {
           console.error('Error getting session:', error);
-          setIsLoading(false); 
           return;
         }
 
         const session = data?.session;
 
-       if (session?.user) {
-  const userData = await createUserFromSupabaseUser(session.user);
-  setUser(userData);
-  cleanupActivityListeners = setupActivityListeners();
-  resetInactivityTimer();
-} else {
-  setUser(null); // <--- Important: prevent infinite loading
-}
+        if (session?.user) {
+          const userData = await createUserFromSupabaseUser(session.user);
+          setUser(userData);
+          cleanupActivityListeners = setupActivityListeners();
+          resetInactivityTimer();
+        } else {
+          setUser(null);
+        }
 
       } catch (err) {
         console.error('Error initializing auth:', err);
+        setUser(null);
       } finally {
-        setIsLoading(false); // ensure loading ends
+        setIsLoading(false);
       }
     };
 

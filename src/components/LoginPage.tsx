@@ -23,7 +23,7 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-     setError(null);
+    setError(null);
     
     try {
       const result = await login(email, password, isSignUp ? { 
@@ -32,11 +32,12 @@ export default function LoginPage({ isSignup: initialIsSignup = false }: LoginPa
         companyName 
       } : undefined);
       
-      // Check if this is admin login (not signup) and show dashboard choice
-      if (email === 'admin@enrichx.com' && !isSignUp && result?.role === 'admin') {
+      // Check if this is admin login (not signup) and show dashboard choice popup
+      if (email === 'admin@enrichx.com' && !isSignUp) {
         setShowDashboardChoice(true);
-      } else if (result?.role === 'admin') {
-        // Admin signup or other admin login - go to admin dashboard
+        return; // Don't navigate yet, show the choice popup
+      } else if (result?.role === 'admin' || result?.is_admin) {
+        // Admin signup or other admin users - go to admin dashboard
         navigate('/dashboard');
       } else {
         // Regular user - go to search dashboard
