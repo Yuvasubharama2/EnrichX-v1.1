@@ -297,6 +297,9 @@ export default function UserDashboard() {
     }
 
     try {
+      console.log('Revealing email for contact:', contactId);
+      console.log('Current user credits:', user.credits_remaining);
+      
       // Deduct 1 credit from user
       const newCredits = user.credits_remaining - 1;
       
@@ -304,9 +307,14 @@ export default function UserDashboard() {
       const { error } = await supabase
         .from('profiles')
         .update({ credits_remaining: newCredits })
-        .eq('id', user.id);
+        .eq('user_id', user.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating credits:', error);
+        throw error;
+      }
+
+      console.log('Credits updated successfully, new credits:', newCredits);
 
       // Add to revealed emails
       const newRevealed = [...revealedEmails, contactId];

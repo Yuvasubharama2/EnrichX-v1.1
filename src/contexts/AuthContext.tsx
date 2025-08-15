@@ -58,21 +58,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const initializeAuth = async () => {
       try {
+        console.log('Initializing auth...');
         const { data, error } = await supabase.auth.getSession();
 
         if (error) {
           console.error('Error getting session:', error);
+          setIsLoading(false);
           return;
         }
 
         const session = data?.session;
+        console.log('Current session:', session?.user?.email || 'No session');
 
         if (session?.user) {
+          console.log('Session found, creating user data...');
           const userData = await createUserFromSupabaseUser(session.user);
+          console.log('User data created:', userData.email);
           setUser(userData);
           cleanupActivityListeners = setupActivityListeners();
           resetInactivityTimer();
         } else {
+          console.log('No session found');
           setUser(null);
         }
 
@@ -80,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error initializing auth:', err);
         setUser(null);
       } finally {
+        console.log('Auth initialization complete');
         setIsLoading(false);
       }
     };
@@ -91,11 +98,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('Auth state changed:', event, session?.user?.email);
 
         if (session?.user) {
+          console.log('Auth state change: creating user data...');
           const userData = await createUserFromSupabaseUser(session.user);
+          console.log('User data from auth change:', userData.email);
           setUser(userData);
           if (!cleanupActivityListeners) cleanupActivityListeners = setupActivityListeners();
           resetInactivityTimer();
         } else {
+          console.log('Auth state change: no session');
           setUser(null);
           if (cleanupActivityListeners) cleanupActivityListeners();
           if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
@@ -113,13 +123,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const createUserFromSupabaseUser = async (supabaseUser: any): Promise<User> => {
     try {
+      console.log('Creating user from Supabase user:', supabaseUser.email);
+      
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', supabaseUser.id)
         .single();
 
+      console.log('Profile fetch result:', { profile, error });
+
       if (!error && profile) {
+        console.log('Using profile data for user creation');
         return {
           id: supabaseUser.id,
           email: profile.email || supabaseUser.email,
@@ -138,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             contacts: 0
           },
           company_name: profile.company_name || '',
-          is_admin: profile.is_admin || profile.role === 'admin' || profile.role === 'superadmin' || supabaseUser.email === 'admin@enrichx.com'
+          is_admin: profile.is_admin || profile.role === 'admin' || supabaseUser.email === 'admin@enrichx.com'
         };
       } else {
         console.log('Profile not found, using metadata fallback:', error);
@@ -153,6 +168,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const createUserFromMetadata = (supabaseUser: any): User => {
     const metadata = supabaseUser.user_metadata || {};
     const isAdmin = supabaseUser.email === 'admin@enrichx.com';
+
+    console.log('Creating user from metadata:', { metadata, isAdmin });
 
     const subscriptionTier = metadata.subscription_tier || metadata.subscriptionTier || metadata.tier || (isAdmin ? 'enterprise' : 'free');
     const defaultCredits = isAdmin ? 10000 : getDefaultCredits(subscriptionTier);
@@ -200,7 +217,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) throw error;
 
         if (data?.user) {
-          await supabase.rpc('create_user_profile_manual', {
+          console.log('Profile creation attempt for user:', data.user.email);
+          
+          // Try to create profile using the RPC function
+          const { error: rpcError } = await supabase.rpc('create_user_profile_manual', {
             user_id: data.user.id,
             user_email: email,
             user_metadata: {
@@ -211,16 +231,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           });
 
+          if (rpcError) {
+            console.error('RPC profile creation failed:', rpcError);
+            // Fallback: try direct insert
+            const { error: insertError } = await supabase
+              .from('profiles')
+              .insert({
+                user_id: data.user.id,
+                email: email,
+                name: signupData.name,
+                company_name: signupData.companyName,
+                role: email === 'admin@enrichx.com' ? 'admin' : 'subscriber',
+                subscription_tier: signupData.subscriptionTier,
+                credits_remaining: getDefaultCredits(signupData.subscriptionTier),
+                credits_monthly_limit: getDefaultCredits(signupData.subscriptionTier)
+              });
+            
+            if (insertError) {
+              console.error('Direct profile insert failed:', insertError);
+            }
+          }
+
           const userData = await createUserFromSupabaseUser(data.user);
           setUser(userData);
           return userData;
         }
       } else {
+        console.log('Login attempt for:', email);
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
         if (data?.user) {
+          console.log('Login successful, creating user data...');
           const userData = await createUserFromSupabaseUser(data.user);
+          console.log('Login user data created:', userData.email);
           setUser(userData);
           return userData;
         }
